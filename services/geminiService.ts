@@ -5,7 +5,7 @@ import { Language, TranslationResponseSchema } from '../types';
 // CRITICAL: process.env.API_KEY is guaranteed to be present in this environment.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const modelName = "gemini-3-pro";
+const modelName = "gemini-2.5-flash-lite";
 
 const responseSchema: Schema = {
   type: Type.OBJECT,
