@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+  "dev": "vite",
+  "server": "node server.js",
+  "start:all": "node server.js & vite"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
