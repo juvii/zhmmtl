@@ -20,7 +20,7 @@ const responseSchema: Schema = {
     },
     details: {
       type: Type.STRING,
-      description: "Brief notes on context, tone, or alternate meanings if applicable.** In the ${targetLang} langauge. ",
+      description: "Brief notes on context, tone, or alternate meanings if applicable. ",
     },
   },
   required: ["translation", "pronunciation"],
@@ -38,6 +38,7 @@ export const translateText = async (
       For Burmese to Chinese, use Simplified Chinese.
       For Chinese to Burmese, use standard Burmese script.
       Provide the pronunciation guide (Pinyin for Chinese output, Romanization for Burmese output).
+      **details: must be in ${targetLang}
       
       Input text: "${text}"
     `;
