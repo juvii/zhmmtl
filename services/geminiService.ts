@@ -20,7 +20,7 @@ const responseSchema: Schema = {
     },
     details: {
       type: Type.STRING,
-      description: "Brief notes on context, tone, or alternate meanings if applicable.",
+      description: "Brief notes on context, tone, or alternate meanings if applicable.** In the ${targetLang} langauge. ",
     },
   },
   required: ["translation", "pronunciation"],
