@@ -10,7 +10,7 @@ import {
   Languages,
   Loader2
 } from 'lucide-react';
-import { translateText } from './services/geminiService';
+import { translateText } from '.src/services/geminiService';
 import { Language, TranslationResult } from './types';
 
 // --- Sub-components defined here to reduce file clutter as requested ---
