@@ -1,18 +1,21 @@
+// vite.config.ts
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load env file based on `mode` in the current working directory.
-  // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
     plugins: [react()],
-    define: {
-      // This is critical: It replaces `process.env.API_KEY` in your code 
-      // with the actual value from your deployment environment variables.
-      'process.env.API_KEY': JSON.stringify(env.API_KEY),
-    },
+    // We no longer need to expose API_KEY here! 
+    // It stays safely on the server.
+    server: {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3000', // Points to your Node server
+          changeOrigin: true,
+        }
+      }
+    }
   };
 });
