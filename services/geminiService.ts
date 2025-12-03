@@ -1,30 +1,7 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
+// src/services/geminiService.ts
 import { Language, TranslationResponseSchema } from '../types';
 
-// Initialize the API client
-// CRITICAL: process.env.API_KEY is guaranteed to be present in this environment.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-const modelName = "gemini-2.5-flash";
-
-const responseSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    translation: {
-      type: Type.STRING,
-      description: "The translated text in the target language.",
-    },
-    pronunciation: {
-      type: Type.STRING,
-      description: "Phonetic pronunciation (Pinyin for Chinese, Romanization for Burmese).",
-    },
-    details: {
-      type: Type.STRING,
-      description: "Brief notes on context, tone, or alternate meanings if applicable. ",
-    },
-  },
-  required: ["translation", "pronunciation"],
-};
+// NOTE: The GoogleGenAI import is removed. The browser no longer needs the SDK.
 
 export const translateText = async (
   text: string,
@@ -32,33 +9,27 @@ export const translateText = async (
   targetLang: Language
 ): Promise<TranslationResponseSchema> => {
   try {
-    const prompt = `
-      Translate the following text from ${sourceLang} to ${targetLang}.
-      Ensure the translation is natural and accurate. 
-      For Burmese to Chinese, use Simplified Chinese.
-      For Chinese to Burmese, use standard Burmese script.
-      Provide the pronunciation guide (Pinyin for Chinese output, Romanization for Burmese output).
-      **details: must be in ${targetLang}
-      
-      Input text: "${text}"
-    `;
-
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: responseSchema,
-        systemInstruction: "You are a professional translator specializing in Burmese (Myanmar) and Chinese (Mandarin) languages. You provide precise translations with helpful phonetic guides.",
+    // We now fetch from our own backend proxy
+    // In production, this URL might be different (e.g., https://api.yourapp.com)
+    const response = await fetch('/api/translate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        text,
+        sourceLang,
+        targetLang,
+      }),
     });
 
-    const jsonText = response.text;
-    if (!jsonText) {
-      throw new Error("Empty response from AI");
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${response.status}`);
     }
 
-    return JSON.parse(jsonText) as TranslationResponseSchema;
+    const data = await response.json();
+    return data as TranslationResponseSchema;
   } catch (error) {
     console.error("Translation error:", error);
     throw error;
