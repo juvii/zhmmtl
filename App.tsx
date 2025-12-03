@@ -314,7 +314,7 @@ const App: React.FC = () => {
 
       {/* Footer */}
       <footer className="mt-auto py-6 text-center text-slate-400 text-sm border-t border-slate-200 bg-white">
-        <p>© {new Date().getFullYear()} Myanmar-China Bridge. Powered by Gemini AI.</p>
+        <p>© {new Date().getFullYear()} Juvi's 翻译. Powered by Gemini AI.</p>
       </footer>
     </div>
   );
