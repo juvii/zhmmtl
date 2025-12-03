@@ -144,7 +144,7 @@ const App: React.FC = () => {
               <Languages size={20} />
             </div>
             <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600">
-              Myanmar-China <span className="text-brand-600">Bridge</span>
+              Juvi's Slop <span className="text-brand-600">翻译</span>
             </h1>
           </div>
           
