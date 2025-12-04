@@ -23,14 +23,16 @@ const LanguageSelector: React.FC<{
   onChange: (lang: Language) => void;
   disabled?: boolean;
 }> = ({ label, selected, onChange, disabled }) => (
-  <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">{label}</span>
+  <div className="flex flex-col gap-1.5 w-full">
+    {/* Hidden on mobile to save space, visible on sm screens */}
+    <span className="hidden sm:block text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">{label}</span>
     <div className="relative">
       <select
         value={selected}
         onChange={(e) => onChange(e.target.value as Language)}
         disabled={disabled}
-        className="appearance-none w-full sm:w-48 bg-white border border-slate-200 text-slate-700 py-2.5 px-4 pr-8 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+        // Changed: py-2 (was 2.5), text-sm on mobile, w-full ensures it fits the grid column
+        className="appearance-none w-full bg-white border border-slate-200 text-slate-700 text-sm sm:text-base py-2 sm:py-2.5 px-3 sm:px-4 pr-8 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm truncate"
       >
         <option value={Language.Burmese}>🇲🇲 Burmese</option>
         <option value={Language.Chinese}>🇨🇳 Chinese (Simplified)</option>
@@ -187,12 +189,12 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="bg-brand-600 p-2 rounded-lg text-white shadow-lg shadow-brand-500/30">
-              <Languages size={20} />
+            <div className="bg-brand-600 p-1.5 sm:p-2 rounded-lg text-white shadow-lg shadow-brand-500/30">
+              <Languages size={18} className="sm:w-5 sm:h-5" />
             </div>
-            <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600">
+            <h1 className="text-lg sm:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600">
               Juvi's Slop <span className="text-brand-600">翻译</span>
             </h1>
           </div>
@@ -207,13 +209,14 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-grow w-full max-w-5xl mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-6">
+      <main className="flex-grow w-full max-w-5xl mx-auto p-3 sm:p-6 flex flex-col lg:flex-row gap-4 sm:gap-6">
         
         {/* Main Translation Area */}
-        <div className="flex-1 flex flex-col gap-6">
+        <div className="flex-1 flex flex-col gap-4 sm:gap-6">
           
-          {/* Controls */}
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+          {/* Controls - OPTIMIZED FOR MOBILE */}
+          {/* Changed flex-col to a grid layout on mobile to keep everything on one line */}
+          <div className="bg-white p-2 sm:p-4 rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 grid grid-cols-[1fr_auto_1fr] sm:flex sm:flex-row items-center gap-2 sm:justify-between sm:gap-4">
             <LanguageSelector 
               label="Translate from" 
               selected={sourceLang} 
@@ -222,10 +225,11 @@ const App: React.FC = () => {
             
             <button 
               onClick={swapLanguages}
-              className="p-2.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-brand-600 transition-colors mt-4 sm:mt-0"
+              // Removed mt-4, added shrink-0 to prevent squishing
+              className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-brand-600 transition-colors shrink-0"
               title="Swap Languages"
             >
-              <ArrowRightLeft size={20} />
+              <ArrowRightLeft size={18} />
             </button>
 
             <LanguageSelector 
@@ -239,8 +243,8 @@ const App: React.FC = () => {
           <div className="flex flex-col gap-4">
             
             {/* Input Card */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden focus-within:ring-2 focus-within:ring-brand-500/50 focus-within:border-brand-500 transition-all">
-              <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 overflow-hidden focus-within:ring-2 focus-within:ring-brand-500/50 focus-within:border-brand-500 transition-all">
+              <div className="p-3 sm:p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Input</span>
                 <div className="flex items-center gap-2">
                   <input 
@@ -278,15 +282,17 @@ const App: React.FC = () => {
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder={`Enter text or upload image...`}
-                  className={`w-full h-40 p-4 resize-none outline-none text-lg leading-relaxed bg-transparent ${sourceLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}
+                  // Changed h-40 to h-32 sm:h-40 to give more keyboard space on mobile
+                  className={`w-full h-32 sm:h-40 p-3 sm:p-4 resize-none outline-none text-base sm:text-lg leading-relaxed bg-transparent ${sourceLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}
                   spellCheck="false"
                 />
               </div>
-              <div className="p-3 bg-white flex justify-end border-t border-slate-100">
+              <div className="p-2 sm:p-3 bg-white flex justify-end border-t border-slate-100">
                 <button
                   onClick={handleTranslate}
                   disabled={!inputText.trim() || isLoading}
-                  className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-xl font-medium transition-all shadow-md shadow-brand-500/20 active:scale-95"
+                  // Full width button on mobile for easier tapping
+                  className="w-full sm:w-auto flex justify-center items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg sm:rounded-xl font-medium transition-all shadow-md shadow-brand-500/20 active:scale-95"
                 >
                   {isTranslating ? (
                     <>
@@ -313,8 +319,8 @@ const App: React.FC = () => {
 
             {/* Output Card */}
             {result && (
-              <div className="bg-white rounded-2xl shadow-lg border border-brand-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-brand-50/30">
+              <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-brand-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="p-3 sm:p-4 border-b border-slate-50 flex justify-between items-center bg-brand-50/30">
                   <span className="text-xs font-bold text-brand-600 uppercase tracking-wider">Result</span>
                   <div className="flex gap-2">
                     <button 
@@ -327,12 +333,12 @@ const App: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="p-6 space-y-4">
+                <div className="p-4 sm:p-6 space-y-4">
                   <div>
-                    <p className={`text-2xl leading-relaxed text-slate-800 ${targetLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}>
+                    <p className={`text-xl sm:text-2xl leading-relaxed text-slate-800 ${targetLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}>
                       {result.translation}
                     </p>
-                    <p className="mt-2 text-slate-500 font-mono text-sm bg-slate-50 inline-block px-2 py-1 rounded border border-slate-100">
+                    <p className="mt-2 text-slate-500 font-mono text-xs sm:text-sm bg-slate-50 inline-block px-2 py-1 rounded border border-slate-100">
                       {result.pronunciation}
                     </p>
                   </div>
@@ -351,7 +357,7 @@ const App: React.FC = () => {
 
             {/* Empty State / Placeholder */}
             {!result && !isLoading && !error && (
-               <div className="flex flex-col items-center justify-center p-12 text-slate-300 border-2 border-dashed border-slate-200 rounded-2xl">
+               <div className="hidden sm:flex flex-col items-center justify-center p-12 text-slate-300 border-2 border-dashed border-slate-200 rounded-2xl">
                   <Languages size={48} strokeWidth={1} className="mb-4 text-slate-200" />
                   <p className="text-sm font-medium">Ready to translate</p>
                </div>
@@ -361,26 +367,30 @@ const App: React.FC = () => {
 
         {/* Sidebar History (Desktop) or Modal (Mobile) */}
         {showHistory && (
-          <div className="w-full lg:w-80 bg-white lg:bg-transparent rounded-2xl shadow-xl lg:shadow-none border lg:border-none border-slate-200 absolute lg:static top-20 right-4 left-4 lg:left-auto z-20 max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="lg:hidden p-4 border-b border-slate-100 flex justify-between items-center bg-white">
-              <h3 className="font-bold text-slate-800">History</h3>
-              <button onClick={() => setShowHistory(false)}><X size={20} /></button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-1 space-y-2 lg:pr-2 custom-scrollbar">
-              <div className="hidden lg:flex items-center gap-2 mb-4 text-slate-400 px-1">
-                <History size={16} />
-                <span className="text-sm font-medium uppercase tracking-wider">Recent</span>
+          <div className="fixed inset-0 sm:static sm:inset-auto z-50 w-full lg:w-80 bg-slate-900/20 sm:bg-transparent backdrop-blur-sm sm:backdrop-blur-none flex items-end sm:block">
+            <div className="w-full bg-white lg:bg-transparent rounded-t-2xl sm:rounded-2xl shadow-2xl lg:shadow-none border lg:border-none border-slate-200 h-[80vh] sm:h-auto sm:max-h-[80vh] overflow-hidden flex flex-col sm:relative animate-in slide-in-from-bottom-10 sm:animate-none">
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white lg:hidden">
+                <h3 className="font-bold text-slate-800">History</h3>
+                <button onClick={() => setShowHistory(false)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
               </div>
               
-              {history.length === 0 ? (
-                <div className="text-center py-8 text-slate-400 text-sm">No history yet</div>
-              ) : (
-                history.map((item, idx) => (
-                  <HistoryItemCard key={item.timestamp + idx} item={item} onClick={() => handleHistoryClick(item)} />
-                ))
-              )}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-1 space-y-2 lg:pr-2 custom-scrollbar bg-white sm:bg-transparent">
+                <div className="hidden lg:flex items-center gap-2 mb-4 text-slate-400 px-1">
+                  <History size={16} />
+                  <span className="text-sm font-medium uppercase tracking-wider">Recent</span>
+                </div>
+                
+                {history.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 text-sm">No history yet</div>
+                ) : (
+                  history.map((item, idx) => (
+                    <HistoryItemCard key={item.timestamp + idx} item={item} onClick={() => handleHistoryClick(item)} />
+                  ))
+                )}
+              </div>
             </div>
+             {/* Backdrop click to close on mobile */}
+            <div className="absolute inset-0 -z-10 sm:hidden" onClick={() => setShowHistory(false)}></div>
           </div>
         )}
       </main>
