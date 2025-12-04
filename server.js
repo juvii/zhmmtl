@@ -43,7 +43,7 @@ const responseSchema = {
     },
     translation: {
       type: Type.STRING,
-      description: "The translated text in the target language.",
+      description: "The translated text.",
     },
     pronunciation: {
       type: Type.STRING,
@@ -88,7 +88,7 @@ app.post('/api/translate', async (req, res) => {
     // 3. Add Strict Instructions
     // We remove "professional translator" fluff to prevent it from defaulting to English.
     const promptInstructions = `
-      TASK: Perform high-fidelity OCR/Transcription and Translation for Burmese and Chinese Langauges.
+      TASK: Perform high-fidelity OCR/Transcription and Translation between Burmese and Chinese Langauges.
       
       LANGUAGES:
       - Source: ${sourceLang}
