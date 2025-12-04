@@ -108,7 +108,9 @@ app.post('/api/translate', async (req, res) => {
       },
     });
 
-    const jsonText = response.text();
+    // FIXED: .text is a property, not a function in @google/genai
+    const jsonText = response.text;
+    
     if (!jsonText) {
       throw new Error("Empty response from AI");
     }
