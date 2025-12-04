@@ -37,9 +37,13 @@ const modelName = "gemini-2.5-flash";
 const responseSchema = {
   type: Type.OBJECT,
   properties: {
+    source_content: {
+      type: Type.STRING,
+      description: "The verbatim text extracted from the image, PDF, or audio file in the original source language. If text input was provided, mirror it here.",
+    },
     translation: {
       type: Type.STRING,
-      description: "The translated text in the target language. If the input is audio, translate the spoken content.",
+      description: "The translated text in the target language.",
     },
     pronunciation: {
       type: Type.STRING,
@@ -47,10 +51,10 @@ const responseSchema = {
     },
     details: {
       type: Type.STRING,
-      description: "Brief notes on context, tone, or alternate meanings. For images/audio, describe what was translated.",
+      description: "Brief notes on context, tone, or alternate meanings. Must be in the target language.",
     },
   },
-  required: ["translation", "pronunciation"],
+  required: ["source_content", "translation", "pronunciation"],
 };
 
 // --- API ROUTES ---
@@ -66,34 +70,44 @@ app.post('/api/translate', async (req, res) => {
     // Construct the parts for Gemini
     const parts = [];
 
-    // 1. Add Text if present
-    if (text) {
-      parts.push({ text: `Input text to translate: "${text}"` });
-    }
-
-    // 2. Add File if present (Base64)
+    // 1. Add File if present (Base64)
     if (file) {
-      // file object should be { mimeType: "image/png", data: "base64..." }
       parts.push({
         inlineData: {
           mimeType: file.mimeType,
           data: file.data
         }
       });
-      parts.push({ text: "Show the ${sourceLang} text extracted in ${sourceLang} typescript " });
     }
 
-    // 3. Add Instructions
+    // 2. Add Text if present
+    if (text) {
+      parts.push({ text: `Source Text: "${text}"` });
+    }
+
+    // 3. Add Strict Instructions
+    // We remove "professional translator" fluff to prevent it from defaulting to English.
     const promptInstructions = `
-      You are a professional bilingual burmese-chinese translator.
-      Translate the input (text, audio, or document) from ${sourceLang} to ${targetLang}.
+      TASK: Perform high-fidelity OCR/Transcription and Translation.
       
-      Requirements:
-      1. Ensure the translation is natural and accurate.
-      2. For Burmese to Chinese, use Simplified Chinese.
-      3. For Chinese to Burmese, use standard Burmese script.
-      4. Provide the pronunciation guide (Pinyin for Chinese output, Romanization for Burmese output).
-      5. **details field**: Must be in ${targetLang}. Include a brief note about the file content if a file was uploaded.
+      LANGUAGES:
+      - Source: ${sourceLang}
+      - Target: ${targetLang}
+      
+      STEPS:
+      1. [EXTRACTION]: 
+         - If an image/PDF is provided: Perform character-by-character OCR. strictly output the ${sourceLang} text found.
+         - **CRITICAL FOR BURMESE**: Pay extreme attention to stacking consonants and tone marks.
+         - If audio is provided: Transcribe the speech verbatim in ${sourceLang}.
+         - Save this extracted content to the 'source_content' field.
+      
+      2. [TRANSLATION]: 
+         - Translate the 'source_content' into ${targetLang}.
+         - Do NOT translate into English.
+      
+      3. [OUTPUT]:
+         - Provide pronunciation guide (Pinyin or Romanization).
+         - Provide brief context/details in ${targetLang}.
     `;
     
     // Add instructions as a text part at the end
@@ -108,7 +122,6 @@ app.post('/api/translate', async (req, res) => {
       },
     });
 
-    // FIXED: .text is a property, not a function in @google/genai
     const jsonText = response.text;
     
     if (!jsonText) {
