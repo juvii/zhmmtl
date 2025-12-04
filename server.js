@@ -80,7 +80,7 @@ app.post('/api/translate', async (req, res) => {
           data: file.data
         }
       });
-      parts.push({ text: "Show the ${sourceLang} text extracted " });
+      parts.push({ text: "Show the ${sourceLang} text extracted in ${sourceLang} typescript " });
     }
 
     // 3. Add Instructions
