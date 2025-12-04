@@ -10,8 +10,9 @@ export interface FileInput {
 }
 
 export interface TranslationResult {
-  original: string;
-  fileName?: string; // Optional: display filename if translation came from a file
+  original: string; // This stores user input text
+  fileName?: string;
+  source_content?: string; // This stores AI extracted text (OCR/ASR)
   translation: string;
   pronunciation: string;
   details?: string;
@@ -21,6 +22,7 @@ export interface TranslationResult {
 }
 
 export interface TranslationResponseSchema {
+  source_content: string;
   translation: string;
   pronunciation: string;
   details: string;
