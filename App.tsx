@@ -11,7 +11,8 @@ import {
   FileText,
   Image as ImageIcon,
   Music,
-  Trash2
+  Trash2,
+  ScanText
 } from 'lucide-react';
 import { translateText } from './services/geminiService';
 import { Language, TranslationResult, FileInput } from './types';
@@ -23,7 +24,6 @@ const fileToBase64 = (file: File): Promise<string> => {
     reader.readAsDataURL(file);
     reader.onload = () => {
       const result = reader.result as string;
-      // Remove the "data:*/*;base64," prefix to get just the raw base64 string
       const base64 = result.split(',')[1];
       resolve(base64);
     };
@@ -74,7 +74,7 @@ const HistoryItemCard: React.FC<{ item: TranslationResult; onClick: () => void }
     <div className="flex items-center gap-2 mb-1">
       {item.fileName && <Paperclip size={12} className="text-brand-500" />}
       <p className={`text-slate-800 line-clamp-1 ${item.sourceLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}>
-        {item.fileName ? item.fileName : item.original}
+        {item.fileName ? item.fileName : (item.source_content || item.original)}
       </p>
     </div>
     <p className={`text-brand-600 line-clamp-1 ${item.targetLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}>
@@ -103,7 +103,6 @@ const App: React.FC = () => {
   const swapLanguages = () => {
     setSourceLang(targetLang);
     setTargetLang(sourceLang);
-    // Don't swap text if we have a file, just clear result
     if (!selectedFile) {
         setInputText(result?.translation || '');
     }
@@ -114,8 +113,7 @@ const App: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Basic validation
-    if (file.size > 9 * 1024 * 1024) { // 9MB limit (safe for server 10MB limit)
+    if (file.size > 9 * 1024 * 1024) {
       setError("File is too large. Please select a file under 9MB.");
       return;
     }
@@ -128,12 +126,10 @@ const App: React.FC = () => {
         data: base64Data
       });
       setError(null);
-      // Clear text input when file is selected to avoid confusion, or keep it as "context"
     } catch (err) {
       setError("Failed to process file.");
     }
     
-    // Reset input so same file can be selected again if needed
     event.target.value = '';
   };
 
@@ -161,6 +157,7 @@ const App: React.FC = () => {
       const newResult: TranslationResult = {
         original: inputText,
         fileName: selectedFile?.name,
+        source_content: data.source_content, // Extracted OCR/ASR text
         translation: data.translation,
         pronunciation: data.pronunciation,
         details: data.details,
@@ -186,7 +183,7 @@ const App: React.FC = () => {
     setSourceLang(item.sourceLang);
     setTargetLang(item.targetLang);
     if (item.fileName) {
-      setInputText(''); // Can't restore file data easily, just show text equivalent
+      setInputText('');
       setError(`Loaded translation for file: ${item.fileName}`);
     } else {
       setInputText(item.original);
@@ -362,8 +359,22 @@ const App: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="p-6 space-y-4">
+                <div className="p-6 space-y-6">
+                  {/* OCR/Detected Text Section */}
+                  {result.source_content && (
+                     <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                        <div className="flex items-center gap-2 mb-2 text-slate-400">
+                           <ScanText size={14} />
+                           <span className="text-xs font-bold uppercase tracking-wider">Detected Source Text</span>
+                        </div>
+                        <p className={`text-slate-700 leading-relaxed ${sourceLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}>
+                           {result.source_content}
+                        </p>
+                     </div>
+                  )}
+
                   <div>
+                    <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Translation</h3>
                     <p className={`text-2xl leading-relaxed text-slate-800 ${targetLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}>
                       {result.translation}
                     </p>
@@ -390,7 +401,7 @@ const App: React.FC = () => {
                   {selectedFile ? (
                      <div className="flex flex-col items-center">
                         <Sparkles size={32} className="text-brand-300 mb-2" />
-                        <p className="text-sm font-medium">File ready for translation</p>
+                        <p className="text-sm font-medium">File ready for OCR & Translation</p>
                      </div>
                   ) : (
                     <>
