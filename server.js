@@ -80,7 +80,7 @@ app.post('/api/translate', async (req, res) => {
           data: file.data
         }
       });
-      parts.push({ text: "Translate the content of this file." });
+      parts.push({ text: "Translate the content of this file to ${targetLang}." });
     }
 
     // 3. Add Instructions
