@@ -8,12 +8,14 @@ import {
   RotateCcw,
   X,
   Languages,
-  Loader2
+  Loader2,
+  Image as ImageIcon,
+  Camera
 } from 'lucide-react';
-import { translateText } from './services/geminiService';
+import { translateText, extractTextFromImage } from './services/geminiService';
 import { Language, TranslationResult } from './types';
 
-// --- Sub-components defined here to reduce file clutter as requested ---
+// --- Sub-components ---
 
 const LanguageSelector: React.FC<{
   label: string;
@@ -71,13 +73,20 @@ const App: React.FC = () => {
   const [targetLang, setTargetLang] = useState<Language>(Language.Chinese);
   const [inputText, setInputText] = useState('');
   const [result, setResult] = useState<TranslationResult | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  
+  // States for Translation
+  const [isTranslating, setIsTranslating] = useState(false);
+  
+  // States for OCR
+  const [isOcrLoading, setIsOcrLoading] = useState(false);
+  
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<TranslationResult[]>([]);
   const [showHistory, setShowHistory] = useState(false);
 
   // Focus ref for input
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const swapLanguages = () => {
     setSourceLang(targetLang);
@@ -89,7 +98,7 @@ const App: React.FC = () => {
   const handleTranslate = useCallback(async () => {
     if (!inputText.trim()) return;
 
-    setIsLoading(true);
+    setIsTranslating(true);
     setError(null);
 
     try {
@@ -110,13 +119,51 @@ const App: React.FC = () => {
     } catch (err) {
       setError('Translation failed. Please try again or check your connection.');
     } finally {
-      setIsLoading(false);
+      setIsTranslating(false);
     }
   }, [inputText, sourceLang, targetLang]);
 
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsOcrLoading(true);
+    setError(null);
+    setResult(null); // Clear previous results
+
+    try {
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+        try {
+          const text = await extractTextFromImage(base64String);
+          if (text) {
+            setInputText(text);
+          } else {
+            setError("No text could be found in this image.");
+          }
+        } catch (err) {
+          setError("Failed to process image. Ensure OCR credentials are set on server.");
+        } finally {
+          setIsOcrLoading(false);
+          // Clear input so same file can be selected again if needed
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      setError("Failed to read file.");
+      setIsOcrLoading(false);
+    }
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    // Could add a toast notification here
   };
 
   const handleHistoryClick = (item: TranslationResult) => {
@@ -133,6 +180,8 @@ const App: React.FC = () => {
     setResult(null);
     inputRef.current?.focus();
   };
+
+  const isLoading = isTranslating || isOcrLoading;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
@@ -193,18 +242,42 @@ const App: React.FC = () => {
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden focus-within:ring-2 focus-within:ring-brand-500/50 focus-within:border-brand-500 transition-all">
               <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Input</span>
-                {inputText && (
-                  <button onClick={clearInput} className="text-slate-400 hover:text-red-500 transition-colors">
-                    <X size={16} />
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                  />
+                  <button 
+                    onClick={triggerFileInput}
+                    disabled={isLoading}
+                    className="flex items-center gap-1 text-slate-500 hover:text-brand-600 transition-colors text-xs font-medium px-2 py-1 rounded-md hover:bg-slate-100"
+                    title="Upload Image for OCR"
+                  >
+                    <ImageIcon size={16} />
+                    <span className="hidden sm:inline">Upload Image</span>
                   </button>
-                )}
+                  {inputText && (
+                    <button onClick={clearInput} className="text-slate-400 hover:text-red-500 transition-colors ml-2">
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="relative">
+              <div className="relative group">
+                {isOcrLoading && (
+                  <div className="absolute inset-0 z-10 bg-white/80 flex flex-col items-center justify-center gap-3 backdrop-blur-sm">
+                    <Loader2 size={32} className="animate-spin text-brand-500" />
+                    <span className="text-sm font-medium text-slate-600">Reading image text...</span>
+                  </div>
+                )}
                 <textarea
                   ref={inputRef}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
-                  placeholder={`Enter ${sourceLang} text here...`}
+                  placeholder={`Enter text or upload image...`}
                   className={`w-full h-40 p-4 resize-none outline-none text-lg leading-relaxed bg-transparent ${sourceLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}
                   spellCheck="false"
                 />
@@ -215,7 +288,7 @@ const App: React.FC = () => {
                   disabled={!inputText.trim() || isLoading}
                   className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-xl font-medium transition-all shadow-md shadow-brand-500/20 active:scale-95"
                 >
-                  {isLoading ? (
+                  {isTranslating ? (
                     <>
                       <Loader2 size={18} className="animate-spin" />
                       <span>Translating...</span>
