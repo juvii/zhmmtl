@@ -51,7 +51,7 @@ const responseSchema = {
     },
     details: {
       type: Type.STRING,
-      description: "Brief notes on context, tone, or alternate meanings. Must be in the target language.",
+      description: "Brief notes on context, tone, or alternate meanings. Must be in ${targetLang}.",
     },
   },
   required: ["source_content", "translation", "pronunciation"],
@@ -88,7 +88,7 @@ app.post('/api/translate', async (req, res) => {
     // 3. Add Strict Instructions
     // We remove "professional translator" fluff to prevent it from defaulting to English.
     const promptInstructions = `
-      TASK: Perform high-fidelity OCR/Transcription and Translation.
+      TASK: Perform high-fidelity OCR/Transcription and Translation for Burmese and Chinese Langauges.
       
       LANGUAGES:
       - Source: ${sourceLang}
@@ -97,13 +97,11 @@ app.post('/api/translate', async (req, res) => {
       STEPS:
       1. [EXTRACTION]: 
          - If an image/PDF is provided: Perform character-by-character OCR. strictly output the ${sourceLang} text found.
-         - **CRITICAL FOR BURMESE**: Pay extreme attention to stacking consonants and tone marks.
          - If audio is provided: Transcribe the speech verbatim in ${sourceLang}.
          - Save this extracted content to the 'source_content' field.
       
       2. [TRANSLATION]: 
          - Translate the 'source_content' into ${targetLang}.
-         - Do NOT translate into English.
       
       3. [OUTPUT]:
          - Provide pronunciation guide (Pinyin or Romanization).
