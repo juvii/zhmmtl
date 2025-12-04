@@ -80,12 +80,12 @@ app.post('/api/translate', async (req, res) => {
           data: file.data
         }
       });
-      parts.push({ text: "Translate the content of this file to ${targetLang}." });
+      parts.push({ text: "Show the ${sourceLang} text extracted " });
     }
 
     // 3. Add Instructions
     const promptInstructions = `
-      You are a professional translator.
+      You are a professional bilingual burmese-chinese translator.
       Translate the input (text, audio, or document) from ${sourceLang} to ${targetLang}.
       
       Requirements:
