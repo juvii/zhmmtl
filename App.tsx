@@ -1,19 +1,37 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { 
   ArrowRightLeft, 
   Sparkles, 
   Copy, 
   History, 
-  Volume2, 
-  RotateCcw,
   X,
   Languages,
-  Loader2
+  Loader2,
+  Paperclip,
+  FileText,
+  Image as ImageIcon,
+  Music,
+  Trash2
 } from 'lucide-react';
 import { translateText } from './services/geminiService';
-import { Language, TranslationResult } from './types';
+import { Language, TranslationResult, FileInput } from './types';
 
-// --- Sub-components defined here to reduce file clutter as requested ---
+// --- Helper: Convert File to Base64 ---
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Remove the "data:*/*;base64," prefix to get just the raw base64 string
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+// --- Sub-components ---
 
 const LanguageSelector: React.FC<{
   label: string;
@@ -34,9 +52,7 @@ const LanguageSelector: React.FC<{
         <option value={Language.Chinese}>🇨🇳 Chinese (Simplified)</option>
       </select>
       <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
-        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-          <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-        </svg>
+        <Languages size={16} />
       </div>
     </div>
   </div>
@@ -55,9 +71,12 @@ const HistoryItemCard: React.FC<{ item: TranslationResult; onClick: () => void }
         {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </span>
     </div>
-    <p className={`text-slate-800 line-clamp-1 mb-1 ${item.sourceLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}>
-      {item.original}
-    </p>
+    <div className="flex items-center gap-2 mb-1">
+      {item.fileName && <Paperclip size={12} className="text-brand-500" />}
+      <p className={`text-slate-800 line-clamp-1 ${item.sourceLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}>
+        {item.fileName ? item.fileName : item.original}
+      </p>
+    </div>
     <p className={`text-brand-600 line-clamp-1 ${item.targetLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}>
       {item.translation}
     </p>
@@ -70,33 +89,78 @@ const App: React.FC = () => {
   const [sourceLang, setSourceLang] = useState<Language>(Language.Burmese);
   const [targetLang, setTargetLang] = useState<Language>(Language.Chinese);
   const [inputText, setInputText] = useState('');
+  const [selectedFile, setSelectedFile] = useState<FileInput | null>(null);
   const [result, setResult] = useState<TranslationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<TranslationResult[]>([]);
   const [showHistory, setShowHistory] = useState(false);
 
-  // Focus ref for input
+  // Refs
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const swapLanguages = () => {
     setSourceLang(targetLang);
     setTargetLang(sourceLang);
-    setInputText(result?.translation || '');
+    // Don't swap text if we have a file, just clear result
+    if (!selectedFile) {
+        setInputText(result?.translation || '');
+    }
     setResult(null);
   };
 
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Basic validation
+    if (file.size > 9 * 1024 * 1024) { // 9MB limit (safe for server 10MB limit)
+      setError("File is too large. Please select a file under 9MB.");
+      return;
+    }
+
+    try {
+      const base64Data = await fileToBase64(file);
+      setSelectedFile({
+        name: file.name,
+        mimeType: file.type,
+        data: base64Data
+      });
+      setError(null);
+      // Clear text input when file is selected to avoid confusion, or keep it as "context"
+    } catch (err) {
+      setError("Failed to process file.");
+    }
+    
+    // Reset input so same file can be selected again if needed
+    event.target.value = '';
+  };
+
+  const clearFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const getFileIcon = (mimeType: string) => {
+    if (mimeType.includes('image')) return <ImageIcon size={20} className="text-purple-500" />;
+    if (mimeType.includes('audio')) return <Music size={20} className="text-pink-500" />;
+    if (mimeType.includes('pdf')) return <FileText size={20} className="text-red-500" />;
+    return <Paperclip size={20} className="text-slate-500" />;
+  };
+
   const handleTranslate = useCallback(async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && !selectedFile) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const data = await translateText(inputText, sourceLang, targetLang);
+      const data = await translateText(inputText, selectedFile, sourceLang, targetLang);
       
       const newResult: TranslationResult = {
         original: inputText,
+        fileName: selectedFile?.name,
         translation: data.translation,
         pronunciation: data.pronunciation,
         details: data.details,
@@ -106,23 +170,27 @@ const App: React.FC = () => {
       };
 
       setResult(newResult);
-      setHistory(prev => [newResult, ...prev].slice(0, 50)); // Keep last 50
-    } catch (err) {
-      setError('Translation failed. Please try again or check your connection.');
+      setHistory(prev => [newResult, ...prev].slice(0, 50)); 
+    } catch (err: any) {
+      setError(err.message || 'Translation failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [inputText, sourceLang, targetLang]);
+  }, [inputText, selectedFile, sourceLang, targetLang]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    // Could add a toast notification here
   };
 
   const handleHistoryClick = (item: TranslationResult) => {
     setSourceLang(item.sourceLang);
     setTargetLang(item.targetLang);
-    setInputText(item.original);
+    if (item.fileName) {
+      setInputText(''); // Can't restore file data easily, just show text equivalent
+      setError(`Loaded translation for file: ${item.fileName}`);
+    } else {
+      setInputText(item.original);
+    }
     setResult(item);
     setShowHistory(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -130,6 +198,7 @@ const App: React.FC = () => {
 
   const clearInput = () => {
     setInputText('');
+    setSelectedFile(null);
     setResult(null);
     inputRef.current?.focus();
   };
@@ -193,26 +262,65 @@ const App: React.FC = () => {
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden focus-within:ring-2 focus-within:ring-brand-500/50 focus-within:border-brand-500 transition-all">
               <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Input</span>
-                {inputText && (
-                  <button onClick={clearInput} className="text-slate-400 hover:text-red-500 transition-colors">
-                    <X size={16} />
-                  </button>
-                )}
+                <div className="flex gap-2">
+                   {/* File Upload Button */}
+                   <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-full transition-colors"
+                   >
+                     <Paperclip size={14} />
+                     Attach File
+                   </button>
+                   <input 
+                     type="file"
+                     ref={fileInputRef}
+                     onChange={handleFileSelect}
+                     className="hidden"
+                     accept="image/*,audio/*,application/pdf"
+                   />
+                   
+                   {(inputText || selectedFile) && (
+                    <button onClick={clearInput} className="text-slate-400 hover:text-red-500 transition-colors ml-2">
+                      <X size={16} />
+                    </button>
+                   )}
+                </div>
               </div>
+
               <div className="relative">
+                {/* File Preview Area */}
+                {selectedFile && (
+                  <div className="px-4 pt-4 pb-0">
+                    <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="p-2 bg-white rounded-lg border border-slate-100 shadow-sm">
+                          {getFileIcon(selectedFile.mimeType)}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-medium text-slate-700 truncate">{selectedFile.name}</span>
+                          <span className="text-xs text-slate-400 uppercase">{selectedFile.mimeType.split('/')[1]}</span>
+                        </div>
+                      </div>
+                      <button onClick={clearFile} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <textarea
                   ref={inputRef}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
-                  placeholder={`Enter ${sourceLang} text here...`}
-                  className={`w-full h-40 p-4 resize-none outline-none text-lg leading-relaxed bg-transparent ${sourceLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}
+                  placeholder={selectedFile ? "Add optional context about the file..." : `Enter ${sourceLang} text here...`}
+                  className={`w-full ${selectedFile ? 'h-24' : 'h-40'} p-4 resize-none outline-none text-lg leading-relaxed bg-transparent ${sourceLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}
                   spellCheck="false"
                 />
               </div>
               <div className="p-3 bg-white flex justify-end border-t border-slate-100">
                 <button
                   onClick={handleTranslate}
-                  disabled={!inputText.trim() || isLoading}
+                  disabled={(!inputText.trim() && !selectedFile) || isLoading}
                   className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-xl font-medium transition-all shadow-md shadow-brand-500/20 active:scale-95"
                 >
                   {isLoading ? (
@@ -279,8 +387,17 @@ const App: React.FC = () => {
             {/* Empty State / Placeholder */}
             {!result && !isLoading && !error && (
                <div className="flex flex-col items-center justify-center p-12 text-slate-300 border-2 border-dashed border-slate-200 rounded-2xl">
-                  <Languages size={48} strokeWidth={1} className="mb-4 text-slate-200" />
-                  <p className="text-sm font-medium">Ready to translate</p>
+                  {selectedFile ? (
+                     <div className="flex flex-col items-center">
+                        <Sparkles size={32} className="text-brand-300 mb-2" />
+                        <p className="text-sm font-medium">File ready for translation</p>
+                     </div>
+                  ) : (
+                    <>
+                      <Languages size={48} strokeWidth={1} className="mb-4 text-slate-200" />
+                      <p className="text-sm font-medium">Ready to translate text, images, or audio</p>
+                    </>
+                  )}
                </div>
             )}
           </div>
