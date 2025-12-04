@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
-import { GoogleGenAI, SchemaType } from '@google/genai';
+// FIXED: Use 'Type' for newer @google/genai versions
+import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -32,20 +33,20 @@ if (!apiKey) {
 const ai = new GoogleGenAI({ apiKey: apiKey });
 const modelName = "gemini-2.5-flash";
 
-// Schema definition
+// Schema definition using 'Type'
 const responseSchema = {
-  type: SchemaType.OBJECT,
+  type: Type.OBJECT,
   properties: {
     translation: {
-      type: SchemaType.STRING,
+      type: Type.STRING,
       description: "The translated text in the target language. If the input is audio, translate the spoken content.",
     },
     pronunciation: {
-      type: SchemaType.STRING,
+      type: Type.STRING,
       description: "Phonetic pronunciation (Pinyin for Chinese, Romanization for Burmese).",
     },
     details: {
-      type: SchemaType.STRING,
+      type: Type.STRING,
       description: "Brief notes on context, tone, or alternate meanings. For images/audio, describe what was translated.",
     },
   },
