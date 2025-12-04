@@ -1,16 +1,13 @@
 // src/services/geminiService.ts
-import { Language, TranslationResponseSchema } from '../types';
-
-// NOTE: The GoogleGenAI import is removed. The browser no longer needs the SDK.
+import { Language, TranslationResponseSchema, FileInput } from '../types';
 
 export const translateText = async (
   text: string,
+  file: FileInput | null,
   sourceLang: Language,
   targetLang: Language
 ): Promise<TranslationResponseSchema> => {
   try {
-    // We now fetch from our own backend proxy
-    // In production, this URL might be different (e.g., https://api.yourapp.com)
     const response = await fetch('/api/translate', {
       method: 'POST',
       headers: {
@@ -18,6 +15,7 @@ export const translateText = async (
       },
       body: JSON.stringify({
         text,
+        file: file ? { mimeType: file.mimeType, data: file.data } : null,
         sourceLang,
         targetLang,
       }),
