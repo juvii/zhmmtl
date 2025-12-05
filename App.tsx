@@ -4,16 +4,15 @@ import {
   Sparkles, 
   Copy, 
   History, 
-  Volume2, 
-  RotateCcw,
   X,
   Languages,
   Loader2,
   Image as ImageIcon,
-  Camera
+  Bot,
+  Globe
 } from 'lucide-react';
 import { translateText, extractTextFromImage } from './services/geminiService';
-import { Language, TranslationResult } from './types';
+import { Language, TranslationResult, TranslationProvider } from './types';
 
 // --- Sub-components ---
 
@@ -23,16 +22,14 @@ const LanguageSelector: React.FC<{
   onChange: (lang: Language) => void;
   disabled?: boolean;
 }> = ({ label, selected, onChange, disabled }) => (
-  <div className="flex flex-col gap-1.5 w-full">
-    {/* Hidden on mobile to save space, visible on sm screens */}
-    <span className="hidden sm:block text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">{label}</span>
+  <div className="flex flex-col gap-1.5 w-full sm:w-auto">
+    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">{label}</span>
     <div className="relative">
       <select
         value={selected}
         onChange={(e) => onChange(e.target.value as Language)}
         disabled={disabled}
-        // Changed: py-2 (was 2.5), text-sm on mobile, w-full ensures it fits the grid column
-        className="appearance-none w-full bg-white border border-slate-200 text-slate-700 text-sm sm:text-base py-2 sm:py-2.5 px-3 sm:px-4 pr-8 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm truncate"
+        className="appearance-none w-full sm:w-48 bg-white border border-slate-200 text-slate-700 py-2.5 px-4 pr-8 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
       >
         <option value={Language.Burmese}>🇲🇲 Burmese</option>
         <option value={Language.Chinese}>🇨🇳 Chinese (Simplified)</option>
@@ -46,15 +43,55 @@ const LanguageSelector: React.FC<{
   </div>
 );
 
+const ModelSelector: React.FC<{
+  selected: TranslationProvider;
+  onChange: (provider: TranslationProvider) => void;
+  disabled?: boolean;
+}> = ({ selected, onChange, disabled }) => (
+  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+    <button
+      onClick={() => onChange('gemini')}
+      disabled={disabled}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+        selected === 'gemini' 
+          ? 'bg-white text-brand-600 shadow-sm' 
+          : 'text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      <Bot size={16} />
+      <span>Gemini 2.5</span>
+    </button>
+    <button
+      onClick={() => onChange('google')}
+      disabled={disabled}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+        selected === 'google' 
+          ? 'bg-white text-blue-600 shadow-sm' 
+          : 'text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      <Globe size={16} />
+      <span>Google</span>
+    </button>
+  </div>
+);
+
 const HistoryItemCard: React.FC<{ item: TranslationResult; onClick: () => void }> = ({ item, onClick }) => (
   <div 
     onClick={onClick}
     className="group relative bg-white border border-slate-100 hover:border-brand-200 p-4 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer"
   >
     <div className="flex justify-between items-start mb-2">
-      <span className="text-xs font-medium text-slate-400">
-        {item.sourceLang === Language.Burmese ? '🇲🇲' : '🇨🇳'} → {item.targetLang === Language.Burmese ? '🇲🇲' : '🇨🇳'}
-      </span>
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-slate-400">
+          {item.sourceLang === Language.Burmese ? '🇲🇲' : '🇨🇳'} → {item.targetLang === Language.Burmese ? '🇲🇲' : '🇨🇳'}
+        </span>
+        {item.provider === 'google' ? (
+          <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100">Google</span>
+        ) : (
+          <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100">Gemini</span>
+        )}
+      </div>
       <span className="text-xs text-slate-300 group-hover:text-brand-400 transition-colors">
         {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </span>
@@ -73,6 +110,8 @@ const HistoryItemCard: React.FC<{ item: TranslationResult; onClick: () => void }
 const App: React.FC = () => {
   const [sourceLang, setSourceLang] = useState<Language>(Language.Burmese);
   const [targetLang, setTargetLang] = useState<Language>(Language.Chinese);
+  const [provider, setProvider] = useState<TranslationProvider>('gemini');
+  
   const [inputText, setInputText] = useState('');
   const [result, setResult] = useState<TranslationResult | null>(null);
   
@@ -104,7 +143,7 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-      const data = await translateText(inputText, sourceLang, targetLang);
+      const data = await translateText(inputText, sourceLang, targetLang, provider);
       
       const newResult: TranslationResult = {
         original: inputText,
@@ -113,6 +152,7 @@ const App: React.FC = () => {
         details: data.details,
         sourceLang,
         targetLang,
+        provider,
         timestamp: Date.now(),
       };
 
@@ -123,7 +163,7 @@ const App: React.FC = () => {
     } finally {
       setIsTranslating(false);
     }
-  }, [inputText, sourceLang, targetLang]);
+  }, [inputText, sourceLang, targetLang, provider]);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -171,6 +211,7 @@ const App: React.FC = () => {
   const handleHistoryClick = (item: TranslationResult) => {
     setSourceLang(item.sourceLang);
     setTargetLang(item.targetLang);
+    setProvider(item.provider);
     setInputText(item.original);
     setResult(item);
     setShowHistory(false);
@@ -189,13 +230,13 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="bg-brand-600 p-1.5 sm:p-2 rounded-lg text-white shadow-lg shadow-brand-500/30">
-              <Languages size={18} className="sm:w-5 sm:h-5" />
+            <div className="bg-brand-600 p-2 rounded-lg text-white shadow-lg shadow-brand-500/30">
+              <Languages size={20} />
             </div>
-            <h1 className="text-lg sm:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600">
-              Juvi's Slop <span className="text-brand-600">翻译</span>
+            <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600">
+              Juvi's <span className="text-brand-600">翻译</span>
             </h1>
           </div>
           
@@ -209,42 +250,52 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-grow w-full max-w-5xl mx-auto p-3 sm:p-6 flex flex-col lg:flex-row gap-4 sm:gap-6">
+      <main className="flex-grow w-full max-w-5xl mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-6">
         
         {/* Main Translation Area */}
-        <div className="flex-1 flex flex-col gap-4 sm:gap-6">
+        <div className="flex-1 flex flex-col gap-6">
           
-          {/* Controls - OPTIMIZED FOR MOBILE */}
-          {/* Changed flex-col to a grid layout on mobile to keep everything on one line */}
-          <div className="bg-white p-2 sm:p-4 rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 grid grid-cols-[1fr_auto_1fr] sm:flex sm:flex-row items-center gap-2 sm:justify-between sm:gap-4">
-            <LanguageSelector 
-              label="Translate from" 
-              selected={sourceLang} 
-              onChange={setSourceLang} 
-            />
+          {/* Controls */}
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center gap-4">
             
-            <button 
-              onClick={swapLanguages}
-              // Removed mt-4, added shrink-0 to prevent squishing
-              className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-brand-600 transition-colors shrink-0"
-              title="Swap Languages"
-            >
-              <ArrowRightLeft size={18} />
-            </button>
+            {/* Language Row */}
+            <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-4">
+              <LanguageSelector 
+                label="Translate from" 
+                selected={sourceLang} 
+                onChange={setSourceLang} 
+              />
+              
+              <button 
+                onClick={swapLanguages}
+                className="p-2.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-brand-600 transition-colors mt-4 sm:mt-0"
+                title="Swap Languages"
+              >
+                <ArrowRightLeft size={20} />
+              </button>
 
-            <LanguageSelector 
-              label="Translate to" 
-              selected={targetLang} 
-              onChange={setTargetLang} 
-            />
+              <LanguageSelector 
+                label="Translate to" 
+                selected={targetLang} 
+                onChange={setTargetLang} 
+              />
+            </div>
+
+            {/* Model Selector Row */}
+             <div className="w-full flex justify-end border-t border-slate-100 pt-3">
+               <div className="flex items-center gap-2">
+                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Engine:</span>
+                 <ModelSelector selected={provider} onChange={setProvider} disabled={isLoading} />
+               </div>
+             </div>
           </div>
 
           {/* Input/Output Container */}
           <div className="flex flex-col gap-4">
             
             {/* Input Card */}
-            <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 overflow-hidden focus-within:ring-2 focus-within:ring-brand-500/50 focus-within:border-brand-500 transition-all">
-              <div className="p-3 sm:p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden focus-within:ring-2 focus-within:ring-brand-500/50 focus-within:border-brand-500 transition-all">
+              <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Input</span>
                 <div className="flex items-center gap-2">
                   <input 
@@ -282,17 +333,19 @@ const App: React.FC = () => {
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder={`Enter text or upload image...`}
-                  // Changed h-40 to h-32 sm:h-40 to give more keyboard space on mobile
-                  className={`w-full h-32 sm:h-40 p-3 sm:p-4 resize-none outline-none text-base sm:text-lg leading-relaxed bg-transparent ${sourceLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}
+                  className={`w-full h-40 p-4 resize-none outline-none text-lg leading-relaxed bg-transparent ${sourceLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}
                   spellCheck="false"
                 />
               </div>
-              <div className="p-2 sm:p-3 bg-white flex justify-end border-t border-slate-100">
+              <div className="p-3 bg-white flex justify-end border-t border-slate-100">
                 <button
                   onClick={handleTranslate}
                   disabled={!inputText.trim() || isLoading}
-                  // Full width button on mobile for easier tapping
-                  className="w-full sm:w-auto flex justify-center items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg sm:rounded-xl font-medium transition-all shadow-md shadow-brand-500/20 active:scale-95"
+                  className={`flex items-center gap-2 text-white px-6 py-2.5 rounded-xl font-medium transition-all shadow-md active:scale-95 ${
+                    provider === 'google' 
+                    ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20' 
+                    : 'bg-brand-600 hover:bg-brand-700 shadow-brand-500/20'
+                  } disabled:bg-slate-300 disabled:shadow-none disabled:cursor-not-allowed`}
                 >
                   {isTranslating ? (
                     <>
@@ -319,9 +372,19 @@ const App: React.FC = () => {
 
             {/* Output Card */}
             {result && (
-              <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-brand-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="p-3 sm:p-4 border-b border-slate-50 flex justify-between items-center bg-brand-50/30">
-                  <span className="text-xs font-bold text-brand-600 uppercase tracking-wider">Result</span>
+              <div className={`bg-white rounded-2xl shadow-lg border overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 ${
+                result.provider === 'google' ? 'border-blue-100' : 'border-brand-100'
+              }`}>
+                <div className={`p-4 border-b flex justify-between items-center ${
+                  result.provider === 'google' ? 'bg-blue-50/30 border-blue-50' : 'bg-brand-50/30 border-slate-50'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-bold uppercase tracking-wider ${
+                      result.provider === 'google' ? 'text-blue-600' : 'text-brand-600'
+                    }`}>
+                      {result.provider === 'google' ? 'Google Translate' : 'Gemini Result'}
+                    </span>
+                  </div>
                   <div className="flex gap-2">
                     <button 
                       onClick={() => copyToClipboard(result.translation)}
@@ -333,20 +396,26 @@ const App: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="p-4 sm:p-6 space-y-4">
+                <div className="p-6 space-y-4">
                   <div>
-                    <p className={`text-xl sm:text-2xl leading-relaxed text-slate-800 ${targetLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}>
+                    <p className={`text-2xl leading-relaxed text-slate-800 ${targetLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}>
                       {result.translation}
                     </p>
-                    <p className="mt-2 text-slate-500 font-mono text-xs sm:text-sm bg-slate-50 inline-block px-2 py-1 rounded border border-slate-100">
-                      {result.pronunciation}
-                    </p>
+                    {result.pronunciation && result.pronunciation !== "N/A (Google Translate)" && (
+                      <p className="mt-2 text-slate-500 font-mono text-sm bg-slate-50 inline-block px-2 py-1 rounded border border-slate-100">
+                        {result.pronunciation}
+                      </p>
+                    )}
                   </div>
 
                   {result.details && (
                     <div className="pt-4 border-t border-slate-100">
                       <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Details & Context</h4>
-                      <p className="text-sm text-slate-600 leading-relaxed bg-brand-50/50 p-3 rounded-lg border border-brand-50/50">
+                      <p className={`text-sm text-slate-600 leading-relaxed p-3 rounded-lg border ${
+                        result.provider === 'google' 
+                        ? 'bg-blue-50/50 border-blue-50/50 text-blue-700' 
+                        : 'bg-brand-50/50 border-brand-50/50'
+                      }`}>
                         {result.details}
                       </p>
                     </div>
@@ -357,7 +426,7 @@ const App: React.FC = () => {
 
             {/* Empty State / Placeholder */}
             {!result && !isLoading && !error && (
-               <div className="hidden sm:flex flex-col items-center justify-center p-12 text-slate-300 border-2 border-dashed border-slate-200 rounded-2xl">
+               <div className="flex flex-col items-center justify-center p-12 text-slate-300 border-2 border-dashed border-slate-200 rounded-2xl">
                   <Languages size={48} strokeWidth={1} className="mb-4 text-slate-200" />
                   <p className="text-sm font-medium">Ready to translate</p>
                </div>
@@ -367,37 +436,33 @@ const App: React.FC = () => {
 
         {/* Sidebar History (Desktop) or Modal (Mobile) */}
         {showHistory && (
-          <div className="fixed inset-0 sm:static sm:inset-auto z-50 w-full lg:w-80 bg-slate-900/20 sm:bg-transparent backdrop-blur-sm sm:backdrop-blur-none flex items-end sm:block">
-            <div className="w-full bg-white lg:bg-transparent rounded-t-2xl sm:rounded-2xl shadow-2xl lg:shadow-none border lg:border-none border-slate-200 h-[80vh] sm:h-auto sm:max-h-[80vh] overflow-hidden flex flex-col sm:relative animate-in slide-in-from-bottom-10 sm:animate-none">
-              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white lg:hidden">
-                <h3 className="font-bold text-slate-800">History</h3>
-                <button onClick={() => setShowHistory(false)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
+          <div className="w-full lg:w-80 bg-white lg:bg-transparent rounded-2xl shadow-xl lg:shadow-none border lg:border-none border-slate-200 absolute lg:static top-20 right-4 left-4 lg:left-auto z-20 max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="lg:hidden p-4 border-b border-slate-100 flex justify-between items-center bg-white">
+              <h3 className="font-bold text-slate-800">History</h3>
+              <button onClick={() => setShowHistory(false)}><X size={20} /></button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-1 space-y-2 lg:pr-2 custom-scrollbar">
+              <div className="hidden lg:flex items-center gap-2 mb-4 text-slate-400 px-1">
+                <History size={16} />
+                <span className="text-sm font-medium uppercase tracking-wider">Recent</span>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-4 sm:p-1 space-y-2 lg:pr-2 custom-scrollbar bg-white sm:bg-transparent">
-                <div className="hidden lg:flex items-center gap-2 mb-4 text-slate-400 px-1">
-                  <History size={16} />
-                  <span className="text-sm font-medium uppercase tracking-wider">Recent</span>
-                </div>
-                
-                {history.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400 text-sm">No history yet</div>
-                ) : (
-                  history.map((item, idx) => (
-                    <HistoryItemCard key={item.timestamp + idx} item={item} onClick={() => handleHistoryClick(item)} />
-                  ))
-                )}
-              </div>
+              {history.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 text-sm">No history yet</div>
+              ) : (
+                history.map((item, idx) => (
+                  <HistoryItemCard key={item.timestamp + idx} item={item} onClick={() => handleHistoryClick(item)} />
+                ))
+              )}
             </div>
-             {/* Backdrop click to close on mobile */}
-            <div className="absolute inset-0 -z-10 sm:hidden" onClick={() => setShowHistory(false)}></div>
           </div>
         )}
       </main>
 
       {/* Footer */}
       <footer className="mt-auto py-6 text-center text-slate-400 text-sm border-t border-slate-200 bg-white">
-        <p>© {new Date().getFullYear()} Juvi's 翻译. Powered by Gemini AI.</p>
+        <p>© {new Date().getFullYear()} Juvi's 翻译. Powered by Gemini AI & Google Cloud.</p>
       </footer>
     </div>
   );
