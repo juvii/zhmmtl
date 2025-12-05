@@ -3,18 +3,12 @@ import cors from 'cors';
 import { GoogleGenAI, Type } from '@google/genai';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { v2 } from '@google-cloud/translate';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 // Note: In Node Functions, environment variables are typically injected 
 // via the platform dashboard rather than a .env file, but we keep this 
 // for local dev if you run it with 'node --env-file=.env' or similar.
 // import dotenv from 'dotenv'; 
 // dotenv.config();
-
-// Define paths for ES Modules (standard boilerplate)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 
