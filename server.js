@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { GoogleGenAI, Type } from '@google/genai';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
+import { v2 } from '@google-cloud/translate';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -17,7 +18,6 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Enable CORS and JSON parsing
-// Increased limit to handle base64 image uploads
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
@@ -31,23 +31,31 @@ if (!apiKey) {
 }
 
 const ai = new GoogleGenAI({ apiKey: apiKey });
-const modelName = "gemini-2.5-flash";
+const geminiModelName = "gemini-2.5-flash";
 
-// 2. Initialize Cloud Vision Client
+// 2. Initialize Cloud Vision AND Translation Clients
 let visionClient = null;
+let translateClient = null;
+
 if (process.env.VISION) {
   try {
     const credentials = JSON.parse(process.env.VISION);
+    
+    // Initialize Vision
     visionClient = new ImageAnnotatorClient({ credentials });
-    console.log("✅ Cloud Vision Client initialized successfully.");
+    
+    // Initialize Translate (v2)
+    translateClient = new v2.Translate({ credentials });
+    
+    console.log("✅ Cloud Services (Vision & Translate) initialized successfully.");
   } catch (error) {
     console.error("❌ Failed to parse VISION environment variable:", error);
   }
 } else {
-  console.warn("⚠️ VISION environment variable not found. OCR features will be disabled.");
+  console.warn("⚠️ VISION environment variable not found. OCR and Google Translate features will be disabled.");
 }
 
-// Schema definition
+// Schema definition for Gemini
 const responseSchema = {
   type: Type.OBJECT,
   properties: {
@@ -81,7 +89,6 @@ app.post('/api/ocr', async (req, res) => {
       return res.status(400).json({ error: "No image data provided" });
     }
 
-    // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
     const base64Image = image.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Image, 'base64');
 
@@ -92,7 +99,6 @@ app.post('/api/ocr', async (req, res) => {
       return res.json({ text: "" });
     }
 
-    // The first annotation is the full text
     const extractedText = detections[0].description;
     res.json({ text: extractedText });
 
@@ -105,13 +111,37 @@ app.post('/api/ocr', async (req, res) => {
 // Route: Translate
 app.post('/api/translate', async (req, res) => {
   try {
-    const { text, sourceLang, targetLang } = req.body;
+    const { text, sourceLang, targetLang, provider = 'gemini' } = req.body;
 
     if (!text) {
       return res.status(400).json({ error: "Text is required" });
     }
 
-    // UPDATED PROMPT LOGIC
+    // --- GOOGLE CLOUD TRANSLATE API STRATEGY ---
+    if (provider === 'google') {
+      if (!translateClient) {
+        return res.status(503).json({ 
+          error: "Google Translate service not configured. Check server credentials." 
+        });
+      }
+
+      // Map internal Language enum to Google Cloud Translate codes
+      // Burmese: 'my', Chinese (Simplified): 'zh-CN'
+      const targetCode = targetLang === 'Burmese' ? 'my' : 'zh-CN';
+      
+      // Perform translation
+      const [translation] = await translateClient.translate(text, targetCode);
+
+      // Return consistent schema
+      // Google Translate (Basic) does not provide pronunciation or details by default
+      return res.json({
+        translation: translation,
+        pronunciation: "N/A (Google Translate)", 
+        details: "Translated via Google Cloud Translation API",
+      });
+    }
+
+    // --- GEMINI 2.5 FLASH STRATEGY (DEFAULT) ---
     const prompt = `
       Translate the following text from ${sourceLang} to ${targetLang}.
       Ensure the translation is natural and accurate. 
@@ -124,7 +154,7 @@ app.post('/api/translate', async (req, res) => {
     `;
 
     const response = await ai.models.generateContent({
-      model: modelName,
+      model: geminiModelName,
       contents: prompt,
       config: {
         responseMimeType: "application/json",
