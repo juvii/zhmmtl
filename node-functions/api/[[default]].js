@@ -1,36 +1,28 @@
 import express from 'express';
 import cors from 'cors';
 import { GoogleGenAI, Type } from '@google/genai';
-import { ImageAnnotatorClient } from '@google-cloud/vision';
-import { v2 } from '@google-cloud/translate';
-
-// Note: In Node Functions, environment variables are typically injected 
-// via the platform dashboard rather than a .env file, but we keep this 
-// for local dev if you run it with 'node --env-file=.env' or similar.
-// import dotenv from 'dotenv'; 
-// dotenv.config();
 
 const app = express();
 
 // --- PLATFORM LIMIT WARNING ---
-// The Node Functions documentation specifies a 6MB request body limit.
-// We keep 50mb here for local compatibility, but the platform will 
-// likely reject requests larger than 6MB before they reach this line.
+// Platform likely limits body size to ~6MB.
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 // --- CONFIGURATION ---
 
-// 1. Initialize Gemini Clients
-// We access env vars directly from process.env which is standard in Node Functions
-const apiKeyFlash = process.env.API_KEY || process.env.GEMINI_API_KEY;
+// 1. Get the API Key
+const API_KEY = process.env.API_KEY || process.env.GEMINI_API_KEY;
 
-// Clients
-// Note: We initialize these lazily or globally. In serverless, 
-// global scope is preserved between warm invocations.
-const aiFlash = new GoogleGenAI({ apiKey: apiKeyFlash });
-const aiLite = new GoogleGenAI({ apiKey: process.env.API_KEY2 || apiKeyFlash });
-const aiPro = new GoogleGenAI({ apiKey: process.env.API_KEY3 || apiKeyFlash });
+if (!API_KEY) {
+  console.error("❌ FATAL ERROR: API Key is missing.");
+}
+
+// 2. Initialize Gemini Client (Native SDK supports API Key)
+const aiFlash = new GoogleGenAI({ apiKey: API_KEY });
+// We can reuse the same key for other models or use specific keys if available
+const aiLite = new GoogleGenAI({ apiKey: process.env.API_KEY2 || API_KEY });
+const aiPro = new GoogleGenAI({ apiKey: process.env.API_KEY3 || API_KEY });
 
 const MODELS = {
   'gemini-2.5-flash': { client: aiFlash, name: "gemini-2.5-flash" },
@@ -38,19 +30,11 @@ const MODELS = {
   'gemini-2.5-pro': { client: aiPro, name: "gemini-2.5-pro" },
 };
 
-// 2. Initialize Cloud Vision AND Translation Clients
-let visionClient = null;
-let translateClient = null;
-
-if (process.env.VISION) {
-  try {
-    const credentials = JSON.parse(process.env.VISION);
-    visionClient = new ImageAnnotatorClient({ credentials });
-    translateClient = new v2.Translate({ credentials });
-  } catch (error) {
-    console.error("❌ Failed to parse VISION environment variable:", error);
-  }
-}
+// 3. Define REST API Endpoints for Vision & Translate
+// We use REST because the Node.js Client Libraries (@google-cloud/vision) 
+// are designed for Service Accounts, not API Keys.
+const VISION_API_URL = `https://vision.googleapis.com/v1/images:annotate?key=${API_KEY}`;
+const TRANSLATE_API_URL = `https://translation.googleapis.com/language/translate/v2?key=${API_KEY}`;
 
 // Schema definition for Gemini
 const responseSchema = {
@@ -113,23 +97,48 @@ const getPrompt = (text, source, target) => {
 
 // --- API ROUTES ---
 
-// NOTE: We changed paths from '/api/ocr' to '/ocr'.
-// Because this file sits in `node-functions/api/`, the platform 
-// handles the `/api` prefix part of the URL.
-
-// Route: OCR
+// Route: OCR (Using Google Vision REST API)
 app.post('/ocr', async (req, res) => {
   try {
-    if (!visionClient) return res.status(503).json({ error: "OCR service not configured" });
     const { image } = req.body;
     if (!image) return res.status(400).json({ error: "No image data provided" });
 
+    // Clean base64 string
     const base64Image = image.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(base64Image, 'base64');
-    const [result] = await visionClient.textDetection(buffer);
-    const extractedText = result.textAnnotations?.[0]?.description || "";
+
+    // Construct REST Payload
+    const requestBody = {
+      requests: [
+        {
+          image: {
+            content: base64Image
+          },
+          features: [
+            {
+              type: "TEXT_DETECTION"
+            }
+          ]
+        }
+      ]
+    };
+
+    const response = await fetch(VISION_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Vision API Error:", errorText);
+      return res.status(response.status).json({ error: "Upstream Vision API failed" });
+    }
+
+    const data = await response.json();
+    const extractedText = data.responses?.[0]?.fullTextAnnotation?.text || "";
     
     res.json({ text: extractedText });
+
   } catch (error) {
     console.error("OCR Error:", error);
     res.status(500).json({ error: "Failed to process image" });
@@ -143,23 +152,41 @@ app.post('/translate', async (req, res) => {
 
     if (!text) return res.status(400).json({ error: "Text is required" });
 
+    // --- STRATEGY: GOOGLE TRANSLATE (REST API) ---
     if (provider === 'google') {
-      if (!translateClient) {
-        return res.status(503).json({ error: "Google Translate not configured." });
-      }
       const codeMap = { 'Burmese': 'my', 'Chinese': 'zh-CN', 'English': 'en' };
       const targetCode = codeMap[targetLang];
-      const [translation] = await translateClient.translate(text, targetCode);
+
+      const response = await fetch(TRANSLATE_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          q: text,
+          target: targetCode,
+          format: 'text'
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Translate API Error:", errorText);
+        return res.status(response.status).json({ error: "Upstream Translate API failed" });
+      }
+
+      const data = await response.json();
+      const translation = data.data?.translations?.[0]?.translatedText || "";
 
       return res.json({
         translation: translation,
         pronunciation: "N/A (Google Translate)", 
-        details: "Translated via Google Cloud",
+        details: "Translated via Google Cloud REST API",
       });
     }
 
+    // --- STRATEGY: GEMINI MODELS (SDK) ---
     const selectedModel = MODELS[provider] || MODELS['gemini-2.5-flash'];
-    // Re-initialize client if apiKey was missing at startup but injected later (rare edge case)
+    
+    // Safety check for API Key injection
     if (!selectedModel.client.apiKey && process.env.API_KEY) {
         selectedModel.client = new GoogleGenAI({ apiKey: process.env.API_KEY });
     }
@@ -186,10 +213,4 @@ app.post('/translate', async (req, res) => {
   }
 });
 
-// --- NO STATIC SERVING ---
-// We removed the static file serving because the Pages/Serverless platform
-// handles the frontend separately.
-
-// --- NO APP.LISTEN ---
-// We export the app instead of listening on a port.
 export default app;
