@@ -3,6 +3,8 @@ export enum Language {
   Chinese = 'Chinese',
 }
 
+export type TranslationProvider = 'gemini' | 'google';
+
 export interface TranslationResult {
   original: string;
   translation: string;
@@ -10,6 +12,7 @@ export interface TranslationResult {
   details?: string;
   sourceLang: Language;
   targetLang: Language;
+  provider: TranslationProvider;
   timestamp: number;
 }
 
