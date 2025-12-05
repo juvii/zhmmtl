@@ -183,8 +183,15 @@ const App: React.FC = () => {
   const [isOcrLoading, setIsOcrLoading] = useState(false);
   
   const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<TranslationResult[]>([]);
+  const [history, setHistory] = useState<TranslationResult[]>(() => {
+  const saved = localStorage.getItem('translation_history');
+  return saved ? JSON.parse(saved) : [];
+});
+  useEffect(() => {
+  localStorage.setItem('translation_history', JSON.stringify(history));
+}, [history]);
   const [showHistory, setShowHistory] = useState(false);
+  
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
