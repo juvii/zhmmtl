@@ -39,13 +39,14 @@ const apiKeyPro = process.env.API_KEY3 || apiKeyFlash;  // Fallback to main if m
 // Clients
 const aiFlash = new GoogleGenAI({ apiKey: apiKeyFlash });
 const aiLite = new GoogleGenAI({ apiKey: apiKeyLite });
-const aiPro = new GoogleGenAI({ apiKey: apiKeyPro });
+const aiFlash2 = new GoogleGenAI({ apiKey: apiKeyPro });
 
 // Model Names
 const MODELS = {
   'gemini-2.5-flash': { client: aiFlash, name: "gemini-2.5-flash" },
   'gemini-2.5-flash-lite': { client: aiLite, name: "gemini-2.5-flash-lite" },
-  'gemini-2.5-pro': { client: aiPro, name: "gemini-2.5-pro" },
+  'gemini-2.5-flash-2': { client: aiFlash2, name: "gemini-2.5-flash" },
+
 };
 
 // 2. Initialize Cloud Vision AND Translation Clients
@@ -196,7 +197,7 @@ app.post('/api/translate', async (req, res) => {
       return res.json({
         translation: translation,
         pronunciation: "N/A (Google Translate)", 
-        details: "Translated via Google Cloud",
+        details: "Translated via Google Cloud API",
       });
     }
 
