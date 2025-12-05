@@ -1,18 +1,14 @@
 // src/services/geminiService.ts
-import { Language, TranslationResponseSchema } from '../types';
-
-// Detect if we are in a mobile app or web environment
-// If VITE_API_URL is set (in .env), use it. Otherwise, default to relative path.
-const BASE_URL = import.meta.env.VITE_API_URL || '';
+import { Language, TranslationResponseSchema, TranslationProvider } from '../types';
 
 export const translateText = async (
   text: string,
   sourceLang: Language,
-  targetLang: Language
+  targetLang: Language,
+  provider: TranslationProvider
 ): Promise<TranslationResponseSchema> => {
   try {
-    // Use BASE_URL + endpoint
-    const response = await fetch(`${BASE_URL}/api/translate`, {
+    const response = await fetch('/api/translate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -21,6 +17,7 @@ export const translateText = async (
         text,
         sourceLang,
         targetLang,
+        provider,
       }),
     });
 
@@ -39,7 +36,7 @@ export const translateText = async (
 
 export const extractTextFromImage = async (base64Image: string): Promise<string> => {
   try {
-    const response = await fetch(`${BASE_URL}/api/ocr`, {
+    const response = await fetch('/api/ocr', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
