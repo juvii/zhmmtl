@@ -1,13 +1,13 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.juvis.translate', // unique ID for your app
-  appName: "Juvi's Translate",
+  appId: 'com.juvi.translator', // Change this to your unique bundle ID
+  appName: "Juvi 翻译",
   webDir: 'dist',
   server: {
-    androidScheme: 'https'
+    androidScheme: 'https',
+    // cleartext: true // Uncomment if your API server is HTTP only (not HTTPS)
   },
-  // Ensure we can access the internet
   plugins: {
     CapacitorHttp: {
       enabled: true,

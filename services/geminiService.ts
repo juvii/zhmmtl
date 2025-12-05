@@ -1,5 +1,6 @@
 // src/services/geminiService.ts
 import { Language, TranslationResponseSchema, TranslationProvider } from '../types';
+import { API_BASE_URL } from '../config';
 
 export const translateText = async (
   text: string,
@@ -8,7 +9,12 @@ export const translateText = async (
   provider: TranslationProvider
 ): Promise<TranslationResponseSchema> => {
   try {
-    const response = await fetch('/api/translate', {
+    // We construct the full URL using the config helper
+    const url = `${API_BASE_URL}/api/translate`;
+    
+    console.log(`Making request to: ${url}`); // Helpful for debugging on device
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -36,7 +42,9 @@ export const translateText = async (
 
 export const extractTextFromImage = async (base64Image: string): Promise<string> => {
   try {
-    const response = await fetch('/api/ocr', {
+    const url = `${API_BASE_URL}/api/ocr`;
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
