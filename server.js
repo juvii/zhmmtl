@@ -17,9 +17,10 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Enable CORS and JSON parsing
+// --- CRITICAL FIX: Enable CORS and High Limits for BOTH JSON and URL-Encoded ---
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true })); // <--- Added this
 
 // --- CONFIGURATION ---
 
@@ -33,8 +34,8 @@ if (!apiKeyFlash) {
 }
 
 // Additional Keys
-const apiKeyLite = process.env.API_KEY2 || apiKeyFlash; // Fallback to main if missing
-const apiKeyPro = process.env.API_KEY3 || apiKeyFlash;  // Fallback to main if missing
+const apiKeyLite = process.env.API_KEY2 || apiKeyFlash; 
+const apiKeyPro = process.env.API_KEY3 || apiKeyFlash;  
 
 // Clients
 const aiFlash = new GoogleGenAI({ apiKey: apiKeyFlash });
@@ -46,7 +47,6 @@ const MODELS = {
   'gemini-2.5-flash': { client: aiFlash, name: "gemini-2.5-flash" },
   'gemini-2.5-flash-lite': { client: aiLite, name: "gemini-2.5-flash-lite" },
   'gemini-2.5-flash-2': { client: aiFlash2, name: "gemini-2.5-flash" },
-
 };
 
 // 2. Initialize Cloud Vision AND Translation Clients
@@ -82,13 +82,11 @@ const responseSchema = {
 const getPrompt = (text, source, target) => {
   const direction = `${source}->${target}`;
 
-  // Common instruction for JSON format
   const baseInstruction = `
     You are a professional translator.
     Output specifically in JSON format with fields: 'translation', 'pronunciation', and 'details'.
   `;
 
-  // Specialized Directions
   switch (direction) {
     case 'Burmese->Chinese':
       return `
@@ -136,7 +134,6 @@ const getPrompt = (text, source, target) => {
         Input: "${text}"
       `;
 
-    // Generic Fallback (e.g., English -> Burmese)
     default:
       return `
         ${baseInstruction}
@@ -159,15 +156,26 @@ app.post('/api/ocr', async (req, res) => {
     const { image } = req.body;
     if (!image) return res.status(400).json({ error: "No image data provided" });
 
+    // 1. Clean Base64
     const base64Image = image.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Image, 'base64');
-    const [result] = await visionClient.textDetection(buffer);
+
+    // 2. Construct Explicit Request Object
+    // This is safer than passing buffer directly for larger files
+    const request = {
+      image: {
+        content: buffer
+      }
+    };
+
+    const [result] = await visionClient.textDetection(request);
+    
     const extractedText = result.textAnnotations?.[0]?.description || "";
     
     res.json({ text: extractedText });
   } catch (error) {
-    console.error("OCR Error:", error);
-    res.status(500).json({ error: "Failed to process image" });
+    console.error("OCR Error Full Details:", error); // Log full object
+    res.status(500).json({ error: "Failed to process image", details: error.message });
   }
 });
 
@@ -184,7 +192,6 @@ app.post('/api/translate', async (req, res) => {
         return res.status(503).json({ error: "Google Translate not configured." });
       }
 
-      // Map to ISO codes
       const codeMap = {
         'Burmese': 'my',
         'Chinese': 'zh-CN',
@@ -203,9 +210,7 @@ app.post('/api/translate', async (req, res) => {
 
     // --- STRATEGY: GEMINI MODELS ---
     
-    // Select the correct client and model name
     const selectedModel = MODELS[provider] || MODELS['gemini-2.5-flash'];
-    
     const prompt = getPrompt(text, sourceLang, targetLang);
 
     const response = await selectedModel.client.models.generateContent({
