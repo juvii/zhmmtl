@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { 
   ArrowRightLeft, Sparkles, Copy, History, X, Languages, Loader2, 
-  Image as ImageIcon, Bot, Zap, Globe, ScanLine, Camera, ChevronLeft, Check
+  Image as ImageIcon, Bot, Zap, Globe, ScanLine, Camera, ChevronLeft
 } from 'lucide-react';
 import { translateText, extractTextFromImage, extractTextWithOverlay } from './services/geminiService';
 import { Language, TranslationResult, TranslationProvider, OCRBlock } from './types';
@@ -40,12 +40,10 @@ const UI_STRINGS = {
     scanTab: "智能扫描",
     homeTab: "文本翻译",
     scanTitle: "图片文字识别",
-    scanInstruct: "上传图片，点击文字即可复制",
+    scanInstruct: "上传图片，直接选择图片中的文字进行复制",
     noTextFound: "未检测到文字",
     processing: "正在分析图片...",
     uploadBtn: "选择图片",
-    detectedText: "识别到的文字",
-    copyText: "复制文字",
   },
   en: {
     appTitle: "Juvi's Translate",
@@ -77,12 +75,10 @@ const UI_STRINGS = {
     scanTab: "Smart Scan",
     homeTab: "Text Translate",
     scanTitle: "Image Text Recognition",
-    scanInstruct: "Upload image and tap text to copy",
+    scanInstruct: "Upload image and select text directly to copy",
     noTextFound: "No text detected",
     processing: "Analyzing image...",
     uploadBtn: "Select Image",
-    detectedText: "Detected Text",
-    copyText: "Copy Text",
   }
 };
 
@@ -117,7 +113,6 @@ const LanguageSelector: React.FC<{
   </div>
 );
 
-// RESTORED: Original ModelSelector Component with visual buttons
 const ModelSelector: React.FC<{
   selected: TranslationProvider;
   onChange: (provider: TranslationProvider) => void;
@@ -125,14 +120,14 @@ const ModelSelector: React.FC<{
 }> = ({ selected, onChange, disabled }) => {
   // Helper to determine styling
   const getStyle = (id: TranslationProvider, activeColor: string) => `
-    flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-all flex-1 sm:flex-none
+    flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-all flex-1 sm:flex-none whitespace-nowrap
     ${selected === id 
       ? `bg-white text-${activeColor}-600 shadow-sm ring-1 ring-slate-200` 
       : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}
   `;
 
   return (
-    <div className="flex flex-wrap sm:flex-nowrap items-center gap-1 bg-slate-100 p-1 rounded-lg w-full sm:w-auto overflow-x-auto">
+    <div className="flex flex-wrap sm:flex-nowrap items-center gap-1 bg-slate-100 p-1 rounded-lg w-full sm:w-auto overflow-x-auto no-scrollbar">
       <button onClick={() => onChange('gemini-2.5-flash-lite')} disabled={disabled} className={getStyle('gemini-2.5-flash-lite', 'emerald')}>
         <Zap size={14} />
         <span>Lite</span>
@@ -205,8 +200,6 @@ const ScanPage: React.FC<{
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [blocks, setBlocks] = useState<OCRBlock[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedBlock, setSelectedBlock] = useState<OCRBlock | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const imgRef = useRef<HTMLImageElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -218,19 +211,16 @@ const ScanPage: React.FC<{
 
     setIsLoading(true);
     setBlocks([]);
-    setSelectedBlock(null);
 
     const reader = new FileReader();
     reader.onload = async () => {
       const base64 = reader.result as string;
       setImageSrc(base64);
       try {
-        // We use the overlay extraction to get blocks
         const result = await extractTextWithOverlay(base64);
         setBlocks(result.blocks);
       } catch (err) {
         console.error(err);
-        // Fallback or error handling
       } finally {
         setIsLoading(false);
       }
@@ -254,19 +244,6 @@ const ScanPage: React.FC<{
     window.addEventListener('resize', updateScale);
     return () => window.removeEventListener('resize', updateScale);
   }, []);
-
-  const handleBlockClick = (block: OCRBlock) => {
-    setSelectedBlock(block);
-    setCopied(false);
-  };
-
-  const handleCopy = () => {
-    if (selectedBlock) {
-      navigator.clipboard.writeText(selectedBlock.text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
 
   return (
     <div className="flex flex-col h-full gap-4">
@@ -295,7 +272,7 @@ const ScanPage: React.FC<{
             </button>
           </div>
         ) : (
-          <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-slate-900">
+          <div className="relative w-full h-full flex items-center justify-center overflow-auto bg-slate-900">
              {isLoading && (
                <div className="absolute inset-0 z-30 bg-black/50 flex flex-col items-center justify-center backdrop-blur-sm text-white">
                  <Loader2 size={40} className="animate-spin mb-3" />
@@ -307,33 +284,35 @@ const ScanPage: React.FC<{
                <img 
                  ref={imgRef}
                  src={imageSrc} 
-                 className="max-w-full max-h-[70vh] object-contain"
+                 className="max-w-full max-h-[70vh] object-contain select-none pointer-events-none"
                  onLoad={updateScale}
                  alt="Scan target"
                />
                
-               {/* Overlay Layer */}
+               {/* Invisible Ink Overlay */}
                {!isLoading && blocks.map((block, idx) => (
                  <div
                    key={idx}
-                   onClick={(e) => { e.stopPropagation(); handleBlockClick(block); }}
-                   className={`absolute cursor-pointer transition-all duration-200 border ${
-                     selectedBlock === block 
-                      ? 'bg-brand-500/40 border-brand-400 z-20' 
-                      : 'bg-white/10 border-white/30 hover:bg-white/30 hover:border-white/50'
-                   }`}
+                   className="absolute text-transparent overflow-hidden whitespace-nowrap select-text cursor-text"
                    style={{
                      left: block.box.x * scale.x,
                      top: block.box.y * scale.y,
                      width: block.box.width * scale.x,
                      height: block.box.height * scale.y,
+                     fontSize: `${block.box.height * scale.y * 0.75}px`, // Heuristic fitting
+                     lineHeight: `${block.box.height * scale.y}px`,
+                     fontFamily: 'sans-serif',
+                     zIndex: 10,
+                     color: 'rgba(0,0,0,0.01)', // Almost transparent but selectable
                    }}
-                 />
+                 >
+                   {block.text}
+                 </div>
                ))}
              </div>
              
              <button 
-                onClick={() => { setImageSrc(null); setBlocks([]); setSelectedBlock(null); }}
+                onClick={() => { setImageSrc(null); setBlocks([]); }}
                 className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-sm z-30 transition-all"
              >
                 <X size={20} />
@@ -342,32 +321,6 @@ const ScanPage: React.FC<{
         )}
         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFile} />
       </div>
-
-      {/* Text Interaction Panel - Only shows when a block is selected */}
-      {selectedBlock && (
-        <div className="bg-white rounded-xl shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)] border border-slate-200 p-4 animate-in slide-in-from-bottom-10 fade-in duration-300">
-          <div className="flex justify-between items-center mb-3">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t.detectedText}</h4>
-            <button onClick={() => setSelectedBlock(null)} className="text-slate-400 hover:text-slate-600"><X size={18}/></button>
-          </div>
-          
-          <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 mb-3 max-h-32 overflow-y-auto">
-             <p className="text-slate-800 text-sm leading-relaxed whitespace-pre-wrap">{selectedBlock.text}</p>
-          </div>
-
-          <button 
-            onClick={handleCopy}
-            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium text-sm transition-all ${
-              copied 
-                ? 'bg-green-500 text-white shadow-green-500/20 shadow-md' 
-                : 'bg-slate-900 text-white hover:bg-slate-800 shadow-slate-900/10 shadow-md'
-            }`}
-          >
-             {copied ? <Check size={18} /> : <Copy size={18} />}
-             {copied ? t.copied : t.copyText}
-          </button>
-        </div>
-      )}
     </div>
   );
 };

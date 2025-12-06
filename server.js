@@ -77,7 +77,6 @@ const getPrompt = (text, source, target) => {
   const direction = `${source}->${target}`;
   const baseInstruction = `You are a professional translator. Output specifically in JSON format with fields: 'translation', 'pronunciation', and 'details'.`;
 
-  // (Kept original switch case for brevity, assuming standard logic here)
   return `
     ${baseInstruction}
     Task: Translate from ${source} to ${target}.
@@ -108,7 +107,7 @@ app.post('/api/ocr', async (req, res) => {
   }
 });
 
-// NEW: Advanced OCR with Overlay Coordinates
+// NEW: Advanced OCR with LINE-BASED Overlay
 app.post('/api/ocr-overlay', async (req, res) => {
   try {
     if (!visionClient) return res.status(503).json({ error: "OCR service not configured" });
@@ -118,48 +117,84 @@ app.post('/api/ocr-overlay', async (req, res) => {
     const base64Image = image.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Image, 'base64');
     
-    // We use documentTextDetection for better block/paragraph structure
     const request = { image: { content: buffer } };
     const [result] = await visionClient.documentTextDetection(request);
     
     const fullText = result.fullTextAnnotation?.text || "";
     const blocks = [];
 
-    // Helper to calculate bounding box from vertices
-    const getBox = (vertices) => {
-      if (!vertices || vertices.length === 0) return null;
-      const xs = vertices.map(v => v.x || 0);
-      const ys = vertices.map(v => v.y || 0);
-      const minX = Math.min(...xs);
-      const maxX = Math.max(...xs);
-      const minY = Math.min(...ys);
-      const maxY = Math.max(...ys);
+    // Helper to merge bounding boxes of words into a line box
+    const getUnionBox = (wordBoxes) => {
+      if (!wordBoxes || wordBoxes.length === 0) return null;
+      
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      
+      wordBoxes.forEach(box => {
+        if (!box) return;
+        box.vertices.forEach(v => {
+           const x = v.x || 0;
+           const y = v.y || 0;
+           minX = Math.min(minX, x);
+           minY = Math.min(minY, y);
+           maxX = Math.max(maxX, x);
+           maxY = Math.max(maxY, y);
+        });
+      });
+
       return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     };
 
-    // Extract Paragraphs as selectable blocks
+    // Extract Lines specifically
     const pages = result.fullTextAnnotation?.pages || [];
+    
     for (const page of pages) {
       for (const block of page.blocks) {
         for (const paragraph of block.paragraphs) {
-          let paragraphText = "";
+          
+          let currentLineWords = [];
+          let currentLineText = "";
+
           for (const word of paragraph.words) {
+            let wordText = "";
+            let breakType = null;
+
             for (const symbol of word.symbols) {
-              paragraphText += symbol.text;
+              wordText += symbol.text;
               if (symbol.property?.detectedBreak) {
-                 const breakType = symbol.property.detectedBreak.type;
-                 if (breakType === 'SPACE' || breakType === 'SURE_SPACE') paragraphText += " ";
-                 if (breakType === 'EOL_SURE_SPACE' || breakType === 'LINE_BREAK') paragraphText += "\n";
+                 breakType = symbol.property.detectedBreak.type;
               }
+            }
+
+            // Accumulate word data
+            currentLineWords.push(word.boundingBox);
+            currentLineText += wordText;
+
+            // Handle spacing for next word in line
+            if (breakType === 'SPACE' || breakType === 'SURE_SPACE') {
+                currentLineText += " ";
+            }
+
+            // Check if this word ends a line
+            if (breakType === 'EOL_SURE_SPACE' || breakType === 'LINE_BREAK' || breakType === 'HYPHEN') {
+                const box = getUnionBox(currentLineWords);
+                if (box && currentLineText.trim()) {
+                   blocks.push({
+                     text: currentLineText.trim(), // Remove trailing space
+                     box: box
+                   });
+                }
+                // Reset for next line
+                currentLineWords = [];
+                currentLineText = "";
             }
           }
           
-          const box = getBox(paragraph.boundingBox?.vertices);
-          if (box && paragraphText.trim()) {
-            blocks.push({
-              text: paragraphText.trim(),
-              box: box
-            });
+          // Flush any remaining words as a line (if paragraph didn't end with explicit break)
+          if (currentLineWords.length > 0) {
+             const box = getUnionBox(currentLineWords);
+             if (box && currentLineText.trim()) {
+                blocks.push({ text: currentLineText.trim(), box: box });
+             }
           }
         }
       }
