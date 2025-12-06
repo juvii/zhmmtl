@@ -7,7 +7,7 @@ export enum Language {
 export type TranslationProvider = 
   | 'gemini-2.5-flash' 
   | 'gemini-2.5-flash-lite' 
-  | 'gemini-2.5-flash-2' // Changed from Pro to Flash 2
+  | 'gemini-2.5-flash-2'
   | 'google';
 
 export interface TranslationResult {
@@ -28,3 +28,22 @@ export interface TranslationResponseSchema {
 }
 
 export type HistoryItem = TranslationResult;
+
+// --- New OCR Types ---
+
+export interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface OCRBlock {
+  text: string;
+  box: BoundingBox;
+}
+
+export interface OCRResult {
+  fullText: string;
+  blocks: OCRBlock[];
+}
