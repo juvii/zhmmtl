@@ -6,7 +6,7 @@
 
 // INSTRUCTIONS: 
 // Replace with your actual deployed server URL (No trailing slash)
-const PROD_API_URL = 'https://juvidothings.store';
+const PROD_API_URL = 'https://juvifanyi.site';
 
 // Detects if the app is running in a Capacitor environment (Android/iOS)
 // Capacitor apps often serve from 'http://localhost' (Android) or 'capacitor://' (iOS)

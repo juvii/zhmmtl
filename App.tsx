@@ -84,6 +84,22 @@ const UI_STRINGS = {
 
 // --- Sub-components ---
 
+// Loading skeleton for OCR blocks during extraction
+const OCRLoadingSkeleton: React.FC = () => (
+  <div className="space-y-3 w-full max-w-md">
+    {[...Array(4)].map((_, i) => (
+      <div
+        key={i}
+        className="h-6 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded-lg animate-pulse"
+        style={{
+          animationDelay: `${i * 0.1}s`,
+          width: `${Math.random() * 40 + 60}%`
+        }}
+      />
+    ))}
+  </div>
+);
+
 const LanguageSelector: React.FC<{
   label: string;
   selected: Language;
@@ -92,12 +108,14 @@ const LanguageSelector: React.FC<{
   t: typeof UI_STRINGS['zh'];
 }> = ({ label, selected, onChange, disabled, t }) => (
   <div className="flex flex-col gap-1 w-full">
-    <span className="hidden sm:block text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">{label}</span>
+    <label id={`lang-${label}`} className="hidden sm:block text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">{label}</label>
     <div className="relative">
       <select
         value={selected}
         onChange={(e) => onChange(e.target.value as Language)}
         disabled={disabled}
+        aria-labelledby={`lang-${label}`}
+        aria-label={label}
         className="appearance-none w-full bg-white border border-slate-200 text-slate-700 text-sm sm:text-base py-2 sm:py-2.5 px-3 sm:px-4 pr-8 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm truncate"
       >
         <option value={Language.Burmese}>{t.burmese}</option>
@@ -166,13 +184,14 @@ const HistoryItemCard: React.FC<{ item: TranslationResult; onClick: () => void }
   };
 
   return (
-    <div 
+    <button
       onClick={onClick}
-      className="group relative bg-white border border-slate-100 hover:border-brand-200 p-3 sm:p-4 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer"
+      className="w-full group relative bg-white border border-slate-100 hover:border-brand-200 p-3 sm:p-4 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer text-left"
+      aria-label={`History item: translate from ${item.sourceLang} to ${item.targetLang}. Original: ${item.original}. Translation: ${item.translation}`}
     >
       <div className="flex justify-between items-start mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-slate-400">
+          <span className="text-xs font-medium text-slate-400" aria-hidden="true">
             {getFlag(item.sourceLang)} → {getFlag(item.targetLang)}
           </span>
           {getProviderBadge(item.provider)}
@@ -187,7 +206,7 @@ const HistoryItemCard: React.FC<{ item: TranslationResult; onClick: () => void }
       <p className="text-brand-600 line-clamp-1 text-sm sm:text-base">
         {item.translation}
       </p>
-    </div>
+    </button>
   );
 };
 
@@ -245,8 +264,17 @@ const ScanPage: React.FC<{
     return () => window.removeEventListener('resize', updateScale);
   }, []);
 
+  // Calculate optimal font size with fallback for accessibility
+  const calculateOptimalFontSize = (boxHeight: number, textLength: number) => {
+    // Base calculation: 70% of box height
+    let size = boxHeight * 0.7;
+    // Adjust for text length to prevent overflow
+    const lengthFactor = Math.min(1, 50 / Math.max(1, textLength));
+    return size * lengthFactor;
+  };
+
   return (
-    <div className="flex flex-col h-full gap-4">
+    <div className="flex flex-col h-full gap-4" role="main" aria-label="OCR scanning interface">
       {/* Top Bar for Scan Page */}
       <div className="flex justify-between items-center px-1">
         <button onClick={onBack} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 transition-colors">
@@ -274,52 +302,85 @@ const ScanPage: React.FC<{
         ) : (
           <div className="relative w-full h-full flex items-center justify-center overflow-auto bg-slate-900">
              {isLoading && (
-               <div className="absolute inset-0 z-30 bg-black/50 flex flex-col items-center justify-center backdrop-blur-sm text-white">
-                 <Loader2 size={40} className="animate-spin mb-3" />
-                 <p className="font-medium">{t.processing}</p>
+               <div 
+                 className="absolute inset-0 z-30 bg-black/50 flex flex-col items-center justify-center backdrop-blur-sm text-white"
+                 aria-live="polite" 
+                 aria-label="Processing image"
+               >
+                 <Loader2 size={40} className="animate-spin mb-3" aria-hidden="true" />
+                 <p className="font-medium mb-4">{t.processing}</p>
+                 <div className="bg-black/40 rounded-lg p-4">
+                   <OCRLoadingSkeleton />
+                 </div>
                </div>
              )}
              
-             <div className="relative inline-block">
+             <div className="relative inline-block group">
                <img 
                  ref={imgRef}
                  src={imageSrc} 
-                 className="max-w-full max-h-[70vh] object-contain select-none pointer-events-none"
+                 className="max-w-full max-h-[70vh] object-contain select-none"
                  onLoad={updateScale}
-                 alt="Scan target"
+                 alt="Document with extracted text"
+                 role="img"
                />
                
-               {/* Invisible Ink Overlay */}
-               {!isLoading && blocks.map((block, idx) => (
-                 <div
-                   key={idx}
-                   className="absolute text-transparent overflow-hidden whitespace-nowrap select-text cursor-text"
-                   style={{
-                     left: block.box.x * scale.x,
-                     top: block.box.y * scale.y,
-                     width: block.box.width * scale.x,
-                     height: block.box.height * scale.y,
-                     fontSize: `${block.box.height * scale.y * 0.75}px`, // Heuristic fitting
-                     lineHeight: `${block.box.height * scale.y}px`,
-                     fontFamily: 'sans-serif',
-                     zIndex: 10,
-                     color: 'rgba(0,0,0,0.01)', // Almost transparent but selectable
-                   }}
-                 >
-                   {block.text}
-                 </div>
-               ))}
+               {/* Enhanced Invisible Ink Overlay with Better Positioning */}
+               {!isLoading && blocks.map((block, idx) => {
+                 const scaledWidth = block.box.width * scale.x;
+                 const scaledHeight = block.box.height * scale.y;
+                 const fontSize = calculateOptimalFontSize(scaledHeight, block.text.length);
+                 
+                 return (
+                   <div
+                     key={idx}
+                     className="absolute select-text cursor-text group/block hover:bg-blue-400/10 transition-colors"
+                     title={`Text: ${block.text}`}
+                     aria-label={`Extracted text: ${block.text}`}
+                     style={{
+                       left: `${block.box.x * scale.x}px`,
+                       top: `${block.box.y * scale.y}px`,
+                       width: `${scaledWidth}px`,
+                       height: `${scaledHeight}px`,
+                       fontSize: `${fontSize}px`,
+                       lineHeight: `${scaledHeight}px`,
+                       fontFamily: 'sans-serif, system-ui',
+                       fontWeight: '400',
+                       zIndex: 10,
+                       color: 'rgba(0,0,0,0.01)',
+                       padding: '2px 4px',
+                       boxSizing: 'border-box',
+                       overflow: 'hidden',
+                       whiteSpace: 'pre-wrap',
+                       wordWrap: 'break-word',
+                       textAlign: 'left',
+                       verticalAlign: 'top',
+                     }}
+                   >
+                     {block.text}
+                   </div>
+                 );
+               })}
              </div>
              
              <button 
                 onClick={() => { setImageSrc(null); setBlocks([]); }}
                 className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-sm z-30 transition-all"
+                aria-label="Close image"
+                title="Close and reset"
              >
-                <X size={20} />
+                <X size={20} aria-hidden="true" />
              </button>
           </div>
         )}
-        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFile} />
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          className="hidden" 
+          accept="image/*" 
+          onChange={handleFile}
+          aria-label="Select image for OCR"
+        />
       </div>
     </div>
   );
@@ -471,6 +532,8 @@ const App: React.FC = () => {
             <button 
               onClick={toggleUiLang}
               className="px-2 py-1 text-xs font-bold bg-slate-100 text-slate-600 rounded border border-slate-200 hover:bg-slate-200 transition-colors"
+              aria-label={`Switch interface language to ${uiLang === 'zh' ? 'English' : 'Chinese'}`}
+              title={`Language: ${uiLang === 'zh' ? 'English' : 'Chinese'}`}
             >
               {uiLang === 'zh' ? 'EN' : '中文'}
             </button>
@@ -479,8 +542,11 @@ const App: React.FC = () => {
               onClick={() => setShowHistory(!showHistory)}
               className={`p-2 rounded-full transition-all ${showHistory ? 'bg-brand-100 text-brand-700' : 'hover:bg-slate-100 text-slate-600'}`}
               title={t.history}
+              aria-label={t.history}
+              aria-expanded={showHistory}
+              aria-controls="history-panel"
             >
-              <History size={20} />
+              <History size={20} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -569,18 +635,25 @@ const App: React.FC = () => {
                       className="hidden" 
                       accept="image/*"
                       onChange={handleLegacyImageUpload}
+                      aria-label="Upload image for OCR"
                     />
                     <button 
                       onClick={() => homeFileInputRef.current?.click()}
                       disabled={isLoading}
                       className="flex items-center gap-1 text-slate-500 hover:text-brand-600 transition-colors text-xs font-medium px-2 py-1 rounded-md hover:bg-slate-100"
+                      aria-label={t.uploadImage}
                     >
-                      <ImageIcon size={16} />
+                      <ImageIcon size={16} aria-hidden="true" />
                       <span className="hidden sm:inline">{t.uploadImage}</span>
                     </button>
                     {inputText && (
-                      <button onClick={clearInput} className="text-slate-400 hover:text-red-500 transition-colors ml-2" title={t.clear}>
-                        <X size={16} />
+                      <button 
+                        onClick={clearInput} 
+                        className="text-slate-400 hover:text-red-500 transition-colors ml-2" 
+                        title={t.clear}
+                        aria-label={t.clear}
+                      >
+                        <X size={16} aria-hidden="true" />
                       </button>
                     )}
                   </div>
@@ -599,7 +672,10 @@ const App: React.FC = () => {
                     placeholder={t.placeholder}
                     className={`w-full h-32 sm:h-40 p-3 sm:p-4 resize-none outline-none text-base sm:text-lg leading-relaxed bg-transparent ${sourceLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}
                     spellCheck="false"
+                    aria-label={t.inputLabel}
+                    aria-describedby="input-hint"
                   />
+                  <span id="input-hint" className="sr-only">Enter text to translate or upload an image for OCR</span>
                 </div>
                 <div className="p-3 bg-white flex justify-end border-t border-slate-100">
                   <button
@@ -610,15 +686,17 @@ const App: React.FC = () => {
                       ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20' 
                       : 'bg-brand-600 hover:bg-brand-700 shadow-brand-500/20'
                     } disabled:bg-slate-300 disabled:shadow-none disabled:cursor-not-allowed`}
+                    aria-busy={isTranslating}
+                    aria-label={isTranslating ? t.translatingBtn : t.translateBtn}
                   >
                     {isTranslating ? (
                       <>
-                        <Loader2 size={18} className="animate-spin" />
+                        <Loader2 size={18} className="animate-spin" aria-hidden="true" />
                         <span>{t.translatingBtn}</span>
                       </>
                     ) : (
                       <>
-                        <Sparkles size={18} />
+                        <Sparkles size={18} aria-hidden="true" />
                         <span>{t.translateBtn}</span>
                       </>
                     )}
@@ -628,8 +706,13 @@ const App: React.FC = () => {
 
               {/* Error Message */}
               {error && (
-                <div className="bg-red-50 text-red-600 p-3 sm:p-4 rounded-xl border border-red-100 text-sm flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-                   <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                <div 
+                  className="bg-red-50 text-red-600 p-3 sm:p-4 rounded-xl border border-red-100 text-sm flex items-center gap-3 animate-in fade-in slide-in-from-top-2"
+                  role="alert"
+                  aria-live="assertive"
+                  aria-atomic="true"
+                >
+                   <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" aria-hidden="true" />
                    {error}
                 </div>
               )}
@@ -701,32 +784,42 @@ const App: React.FC = () => {
 
         {/* Sidebar History - Only show on Home view */}
         {showHistory && view === 'home' && (
-          <div className="fixed lg:static inset-0 z-50 bg-white lg:bg-transparent lg:w-80 lg:block flex flex-col lg:border-none">
+          <aside 
+            id="history-panel"
+            className="fixed lg:static inset-0 z-50 bg-white lg:bg-transparent lg:w-80 lg:block flex flex-col lg:border-none"
+            role="region"
+            aria-label={t.history}
+          >
             <div className="lg:hidden p-4 border-b border-slate-100 flex justify-between items-center bg-white shadow-sm">
               <h3 className="font-bold text-slate-800 text-lg">{t.history}</h3>
               <button 
                 onClick={() => setShowHistory(false)}
                 className="p-2 bg-slate-100 rounded-full text-slate-600"
+                aria-label="Close history panel"
               >
-                <X size={20} />
+                <X size={20} aria-hidden="true" />
               </button>
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 lg:p-1 space-y-3 lg:space-y-2 custom-scrollbar">
               <div className="hidden lg:flex items-center gap-2 mb-4 text-slate-400 px-1">
-                <History size={16} />
+                <History size={16} aria-hidden="true" />
                 <span className="text-sm font-medium uppercase tracking-wider">{t.recent}</span>
               </div>
               
               {history.length === 0 ? (
-                <div className="text-center py-12 lg:py-8 text-slate-400 text-sm">{t.noHistory}</div>
+                <div className="text-center py-12 lg:py-8 text-slate-400 text-sm" aria-live="polite">{t.noHistory}</div>
               ) : (
-                history.map((item, idx) => (
-                  <HistoryItemCard key={item.timestamp + idx} item={item} onClick={() => handleHistoryClick(item)} />
-                ))
+                <ul>
+                  {history.map((item, idx) => (
+                    <li key={item.timestamp + idx}>
+                      <HistoryItemCard item={item} onClick={() => handleHistoryClick(item)} />
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
-          </div>
+          </aside>
         )}
       </main>
 
