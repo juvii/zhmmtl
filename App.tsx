@@ -6,7 +6,6 @@ import {
 import { translateText, extractTextFromImage, extractTextWithOverlay } from './services/geminiService';
 import { Language, TranslationResult, TranslationProvider, OCRBlock } from './types';
 
-// --- Localization Config ---
 type UiLanguage = 'zh' | 'en';
 
 const UI_STRINGS = {
@@ -36,7 +35,6 @@ const UI_STRINGS = {
     burmese: "🇲🇲 缅甸语",
     chinese: "🇨🇳 中文 (简体)",
     english: "🇺🇸 英语",
-    // OCR Specific
     scanTab: "智能扫描",
     homeTab: "文本翻译",
     scanTitle: "图片文字识别",
@@ -71,7 +69,6 @@ const UI_STRINGS = {
     burmese: "🇲🇲 Burmese",
     chinese: "🇨🇳 Chinese",
     english: "🇺🇸 English",
-    // OCR Specific
     scanTab: "Smart Scan",
     homeTab: "Text Translate",
     scanTitle: "Image Text Recognition",
@@ -82,9 +79,6 @@ const UI_STRINGS = {
   }
 };
 
-// --- Sub-components ---
-
-// Loading skeleton for OCR blocks during extraction
 const OCRLoadingSkeleton: React.FC = () => (
   <div className="space-y-3 w-full max-w-md">
     {[...Array(4)].map((_, i) => (
@@ -136,7 +130,6 @@ const ModelSelector: React.FC<{
   onChange: (provider: TranslationProvider) => void;
   disabled?: boolean;
 }> = ({ selected, onChange, disabled }) => {
-  // Helper to determine styling
   const getStyle = (id: TranslationProvider, activeColor: string) => `
     flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-all flex-1 sm:flex-none whitespace-nowrap
     ${selected === id 
@@ -210,8 +203,6 @@ const HistoryItemCard: React.FC<{ item: TranslationResult; onClick: () => void }
   );
 };
 
-// --- OCR Page Component ---
-
 const ScanPage: React.FC<{
   t: typeof UI_STRINGS['zh'];
   onBack: () => void;
@@ -264,18 +255,14 @@ const ScanPage: React.FC<{
     return () => window.removeEventListener('resize', updateScale);
   }, []);
 
-  // Calculate optimal font size with fallback for accessibility
   const calculateOptimalFontSize = (boxHeight: number, textLength: number) => {
-    // Base calculation: 70% of box height
-    let size = boxHeight * 0.7;
-    // Adjust for text length to prevent overflow
+    const size = boxHeight * 0.7;
     const lengthFactor = Math.min(1, 50 / Math.max(1, textLength));
     return size * lengthFactor;
   };
 
   return (
     <div className="flex flex-col h-full gap-4" role="main" aria-label="OCR scanning interface">
-      {/* Top Bar for Scan Page */}
       <div className="flex justify-between items-center px-1">
         <button onClick={onBack} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 transition-colors">
           <ChevronLeft size={20} />
@@ -325,7 +312,6 @@ const ScanPage: React.FC<{
                  role="img"
                />
                
-               {/* Enhanced Invisible Ink Overlay with Better Positioning */}
                {!isLoading && blocks.map((block, idx) => {
                  const scaledWidth = block.box.width * scale.x;
                  const scaledHeight = block.box.height * scale.y;
@@ -386,24 +372,20 @@ const ScanPage: React.FC<{
   );
 };
 
-// --- Main App Component ---
-
 const App: React.FC = () => {
   const [uiLang, setUiLang] = useState<UiLanguage>('zh');
   const t = UI_STRINGS[uiLang];
 
   const [view, setView] = useState<'home' | 'scan'>('home');
   
-  // Shared State
   const [sourceLang, setSourceLang] = useState<Language>(Language.Burmese);
   const [targetLang, setTargetLang] = useState<Language>(Language.Chinese);
   const [provider, setProvider] = useState<TranslationProvider>('gemini-2.5-flash');
   
-  // Home State
   const [inputText, setInputText] = useState('');
   const [result, setResult] = useState<TranslationResult | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
-  const [isOcrLoading, setIsOcrLoading] = useState(false); // Legacy OCR loading state
+  const [isOcrLoading, setIsOcrLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const [history, setHistory] = useState<TranslationResult[]>(() => {
@@ -516,7 +498,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
-      {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-2.5 cursor-pointer" onClick={() => setView('home')}>
@@ -562,10 +543,8 @@ const App: React.FC = () => {
              />
           </div>
         ) : (
-          /* Main Translation View */
           <div className="flex-1 flex flex-col gap-4 sm:gap-6">
             
-            {/* View Switcher Banner */}
             <div className="bg-gradient-to-r from-brand-500 to-brand-600 rounded-xl p-4 text-white flex items-center justify-between shadow-lg shadow-brand-500/20">
               <div className="flex items-center gap-3">
                 <div className="bg-white/20 p-2 rounded-lg"><ScanLine size={20} /></div>
@@ -582,10 +561,8 @@ const App: React.FC = () => {
               </button>
             </div>
             
-            {/* Controls */}
             <div className="bg-white p-3 sm:p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center gap-3 sm:gap-4">
               
-              {/* Language Row */}
               <div className="w-full flex flex-row items-end justify-between gap-2 sm:gap-4">
                 <div className="flex-1 min-w-0">
                   <LanguageSelector 
@@ -614,17 +591,14 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Model Selector Row */}
                <div className="w-full flex flex-col sm:flex-row justify-between items-center border-t border-slate-100 pt-3 gap-2">
                  <span className="hidden sm:inline text-xs font-semibold text-slate-400 uppercase tracking-wider self-start sm:self-center mt-1 sm:mt-0">{t.engine}:</span>
                  <ModelSelector selected={provider} onChange={setProvider} disabled={isLoading} />
                </div>
             </div>
 
-            {/* Input/Output Container */}
             <div className="flex flex-col gap-4">
               
-              {/* Input Card */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden focus-within:ring-2 focus-within:ring-brand-500/50 focus-within:border-brand-500 transition-all">
                 <div className="p-3 sm:p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t.inputLabel}</span>
@@ -704,7 +678,6 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Error Message */}
               {error && (
                 <div 
                   className="bg-red-50 text-red-600 p-3 sm:p-4 rounded-xl border border-red-100 text-sm flex items-center gap-3 animate-in fade-in slide-in-from-top-2"
@@ -717,7 +690,6 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {/* Output Card */}
               {result && (
                 <div className={`bg-white rounded-2xl shadow-lg border overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 ${
                   result.provider === 'google' ? 'border-blue-100' : 'border-brand-100'
@@ -771,7 +743,6 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {/* Empty State */}
               {!result && !isLoading && !error && (
                  <div className="flex flex-col items-center justify-center p-8 sm:p-12 text-slate-300 border-2 border-dashed border-slate-200 rounded-2xl">
                     <Languages size={40} strokeWidth={1} className="mb-4 text-slate-200 sm:w-12 sm:h-12" />
@@ -782,7 +753,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Sidebar History - Only show on Home view */}
         {showHistory && view === 'home' && (
           <aside 
             id="history-panel"
@@ -823,7 +793,6 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Footer */}
       <footer className="mt-auto py-6 text-center text-slate-400 text-xs sm:text-sm border-t border-slate-200 bg-white px-4">
         <p>{t.footer}</p>
       </footer>

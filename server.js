@@ -7,24 +7,18 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Load env vars
 dotenv.config();
 
-// Define paths for ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// --- CRITICAL FIX: Enable CORS and High Limits for BOTH JSON and URL-Encoded ---
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// --- CONFIGURATION ---
-
-// 1. Initialize Gemini Clients
 const apiKeyFlash = process.env.API_KEY || process.env.GEMINI_API_KEY;
 if (!apiKeyFlash) {
   console.error("❌ FATAL ERROR: Main API Key is missing.");
@@ -44,7 +38,6 @@ const MODELS = {
   'gemini-2.5-flash-2': { client: aiFlash2, name: "gemini-2.5-flash" },
 };
 
-// 2. Initialize Cloud Vision AND Translation Clients
 let visionClient = null;
 let translateClient = null;
 
@@ -71,8 +64,6 @@ const responseSchema = {
   required: ["translation", "pronunciation"],
 };
 
-// --- PROMPT ENGINEERING ---
-
 const getPrompt = (text, source, target) => {
   const direction = `${source}->${target}`;
   const baseInstruction = `You are a professional translator. Output specifically in JSON format with fields: 'translation', 'pronunciation', and 'details'.`;
@@ -84,9 +75,6 @@ const getPrompt = (text, source, target) => {
   `;
 };
 
-// --- API ROUTES ---
-
-// Original OCR (Simple Text)
 app.post('/api/ocr', async (req, res) => {
   try {
     if (!visionClient) return res.status(503).json({ error: "OCR service not configured" });
@@ -107,7 +95,6 @@ app.post('/api/ocr', async (req, res) => {
   }
 });
 
-// NEW: Advanced OCR with LINE-BASED Overlay
 app.post('/api/ocr-overlay', async (req, res) => {
   try {
     if (!visionClient) return res.status(503).json({ error: "OCR service not configured" });
@@ -123,7 +110,6 @@ app.post('/api/ocr-overlay', async (req, res) => {
     const fullText = result.fullTextAnnotation?.text || "";
     const blocks = [];
 
-    // Helper to merge bounding boxes of words into a line box
     const getUnionBox = (wordBoxes) => {
       if (!wordBoxes || wordBoxes.length === 0) return null;
       
@@ -144,7 +130,6 @@ app.post('/api/ocr-overlay', async (req, res) => {
       return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     };
 
-    // Extract Lines specifically
     const pages = result.fullTextAnnotation?.pages || [];
     
     for (const page of pages) {
@@ -207,7 +192,6 @@ app.post('/api/ocr-overlay', async (req, res) => {
   }
 });
 
-// Route: Translate
 app.post('/api/translate', async (req, res) => {
   try {
     const { text, sourceLang, targetLang, provider = 'gemini-2.5-flash' } = req.body;

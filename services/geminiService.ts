@@ -1,7 +1,6 @@
 import { Language, TranslationResponseSchema, TranslationProvider, OCRResult } from '../types';
 import { API_BASE_URL } from '../config';
 
-// ... existing translateText code ... 
 export const translateText = async (
   text: string,
   sourceLang: Language,
@@ -28,7 +27,6 @@ export const translateText = async (
   }
 };
 
-// ... existing simple OCR code ...
 export const extractTextFromImage = async (base64Image: string): Promise<string> => {
   try {
     const url = `${API_BASE_URL}/api/ocr`;
@@ -51,7 +49,6 @@ export const extractTextFromImage = async (base64Image: string): Promise<string>
   }
 };
 
-// NEW: Advanced Overlay OCR
 export const extractTextWithOverlay = async (base64Image: string): Promise<OCRResult> => {
   try {
     const url = `${API_BASE_URL}/api/ocr-overlay`;

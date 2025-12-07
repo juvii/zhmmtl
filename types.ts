@@ -29,8 +29,6 @@ export interface TranslationResponseSchema {
 
 export type HistoryItem = TranslationResult;
 
-// --- New OCR Types ---
-
 export interface BoundingBox {
   x: number;
   y: number;
