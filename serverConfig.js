@@ -13,6 +13,7 @@ export const MODELS_CONFIG = {
         apiKey: process.env.MODEL1_API_KEY || process.env.OPENAI_API_KEY,
         baseURL: process.env.MODEL1_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai',
         modelName: process.env.MODEL1_NAME || 'gemma-3-27b-it',
+        searchCX: process.env.SEARCH_CX,
     },
     'model2': {
         // Example: High Intelligence Model (e.g., GPT-4o, Claude 3.5 Sonnet via wrapper)

@@ -217,6 +217,27 @@ app.post('/api/ocr-overlay', async (req, res) => {
   }
 });
 
+const performSearch = async (query, apiKey, cx) => {
+  if (!cx) {
+    console.warn("⚠️ SEARCH_CX not found in environment variables. tailored search disabled.");
+    return null;
+  }
+  try {
+    const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const err = await res.json();
+      console.error("Search API Error:", err);
+      return null;
+    }
+    const data = await res.json();
+    return data.items?.map(item => `[${item.title}](${item.link}): ${item.snippet}`).join('\n') || null;
+  } catch (error) {
+    console.error("Search Request Failed:", error);
+    return null;
+  }
+};
+
 app.post('/api/translate', async (req, res) => {
   try {
     // provider is now 'model1', 'model2', 'model3', or 'google'
@@ -252,7 +273,18 @@ app.post('/api/translate', async (req, res) => {
       return res.status(500).json({ error: `Server configuration error: Missing API Key for ${provider}` });
     }
 
-    const messages = getMessages(text, sourceLang, targetLang);
+    let messages = getMessages(text, sourceLang, targetLang);
+
+    // FEATURE: Manual Google Search for Model 1 (Gemma)
+    if (useSearch && provider === 'model1') {
+      console.log("🔍 Performing Web Search for:", text.substring(0, 50));
+      const searchResults = await performSearch(text, modelConfig.apiKey, modelConfig.searchCX);
+
+      if (searchResults) {
+        // Inject search results into the System Prompt (first message)
+        messages[0].content += `\n\nAdditional Context from Web Search:\n${searchResults}\n\nUse this information to improve the translation accuracy if relevant.`;
+      }
+    }
 
     // Prepare completion options
     const completionOptions = {
@@ -262,15 +294,8 @@ app.post('/api/translate', async (req, res) => {
     };
 
     // FIX for Model 1 (Gemma/Google): Do not use response_format: json_object if inconsistent
-    // Only apply JSON mode for models we know support it well or if not Model 1
     if (provider !== 'model1') {
       completionOptions.response_format = { type: "json_object" };
-    }
-
-    // FEATURE: Google Search Grounding for Model 1
-    if (useSearch && provider === 'model1') {
-      // Adding Google Search tool via extra_body (OpenAI Compat for Gemini)
-      completionOptions.tools = [{ google_search_retrieval: {} }];
     }
 
     const completion = await openai.chat.completions.create(completionOptions);
@@ -279,7 +304,7 @@ app.post('/api/translate', async (req, res) => {
 
     // Parse the JSON string from the LLM
     try {
-      // Cleanup markdown code blocks if any (common with models when json_mode is off)
+      // Cleanup markdown code blocks if any
       const cleanJsonText = jsonText.replace(/```json\n?|\n?```/g, '').trim();
       const parsed = JSON.parse(cleanJsonText);
       res.json(parsed);
