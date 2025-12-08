@@ -5,14 +5,15 @@ export const translateText = async (
   text: string,
   sourceLang: Language,
   targetLang: Language,
-  provider: TranslationProvider
+  provider: TranslationProvider,
+  useSearch: boolean = false
 ): Promise<TranslationResponseSchema> => {
   try {
     const url = `${API_BASE_URL}/api/translate`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, sourceLang, targetLang, provider }),
+      body: JSON.stringify({ text, sourceLang, targetLang, provider, useSearch }),
     });
 
     if (!response.ok) {

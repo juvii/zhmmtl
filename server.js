@@ -220,7 +220,7 @@ app.post('/api/ocr-overlay', async (req, res) => {
 app.post('/api/translate', async (req, res) => {
   try {
     // provider is now 'model1', 'model2', 'model3', or 'google'
-    const { text, sourceLang, targetLang, provider = 'model1' } = req.body;
+    const { text, sourceLang, targetLang, provider = 'model1', useSearch = false } = req.body;
 
     if (!text) return res.status(400).json({ error: "Text is required" });
 
@@ -254,18 +254,34 @@ app.post('/api/translate', async (req, res) => {
 
     const messages = getMessages(text, sourceLang, targetLang);
 
-    const completion = await openai.chat.completions.create({
+    // Prepare completion options
+    const completionOptions = {
       model: modelConfig.modelName,
       messages: messages,
-      response_format: { type: "json_object" }, // Ensure JSON mode is on if supported
       temperature: 0.3,
-    });
+    };
+
+    // FIX for Model 1 (Gemma/Google): Do not use response_format: json_object if inconsistent
+    // Only apply JSON mode for models we know support it well or if not Model 1
+    if (provider !== 'model1') {
+      completionOptions.response_format = { type: "json_object" };
+    }
+
+    // FEATURE: Google Search Grounding for Model 1
+    if (useSearch && provider === 'model1') {
+      // Adding Google Search tool via extra_body (OpenAI Compat for Gemini)
+      completionOptions.tools = [{ google_search_retrieval: {} }];
+    }
+
+    const completion = await openai.chat.completions.create(completionOptions);
 
     const jsonText = completion.choices[0].message.content;
 
     // Parse the JSON string from the LLM
     try {
-      const parsed = JSON.parse(jsonText);
+      // Cleanup markdown code blocks if any (common with models when json_mode is off)
+      const cleanJsonText = jsonText.replace(/```json\n?|\n?```/g, '').trim();
+      const parsed = JSON.parse(cleanJsonText);
       res.json(parsed);
     } catch (parseError) {
       console.error("Failed to parse LLM response:", jsonText);

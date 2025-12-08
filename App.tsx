@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ArrowRightLeft, Sparkles, Copy, History, X, Languages, Loader2,
-  Image as ImageIcon, ScanLine,
+  Image as ImageIcon, ScanLine, Globe
 } from 'lucide-react';
 import { translateText, extractTextFromImage } from './services/geminiService';
 import { Language, TranslationResult, TranslationProvider } from './types';
@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [sourceLang, setSourceLang] = useState<Language>(Language.Burmese);
   const [targetLang, setTargetLang] = useState<Language>(Language.Chinese);
   const [provider, setProvider] = useState<TranslationProvider>('model1');
+  const [useSearch, setUseSearch] = useState(false);
 
   const [inputText, setInputText] = useState('');
   const [result, setResult] = useState<TranslationResult | null>(null);
@@ -55,7 +56,7 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-      const data = await translateText(inputText, sourceLang, targetLang, provider);
+      const data = await translateText(inputText, sourceLang, targetLang, provider, useSearch);
 
       const newResult: TranslationResult = {
         original: inputText,
@@ -234,6 +235,19 @@ const App: React.FC = () => {
               <div className="w-full flex flex-col sm:flex-row justify-between items-center border-t border-slate-100 pt-3 gap-2">
                 <span className="hidden sm:inline text-xs font-semibold text-slate-400 uppercase tracking-wider self-start sm:self-center mt-1 sm:mt-0">{t.engine}:</span>
                 <ModelSelector selected={provider} onChange={setProvider} disabled={isLoading} />
+              </div>
+
+              <div className="w-full flex justify-end px-2 sm:px-0">
+                <button
+                  onClick={() => setUseSearch(!useSearch)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${useSearch
+                    ? 'bg-blue-50 text-blue-600 border-blue-200'
+                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                    }`}
+                >
+                  <Globe size={14} className={useSearch ? "text-blue-500" : "text-slate-400"} />
+                  {useSearch ? "Search On" : "Search Off"}
+                </button>
               </div>
             </div>
 
