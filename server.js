@@ -298,6 +298,8 @@ app.post('/api/translate', async (req, res) => {
       completionOptions.response_format = { type: "json_object" };
     }
 
+    console.log(`🚀 Sending request to ${provider} (${modelConfig.modelName}) via ${modelConfig.baseURL}`);
+
     const completion = await openai.chat.completions.create(completionOptions);
 
     const jsonText = completion.choices[0].message.content;
