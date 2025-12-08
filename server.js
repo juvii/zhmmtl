@@ -275,30 +275,57 @@ app.post('/api/translate', async (req, res) => {
 
     let messages = getMessages(text, sourceLang, targetLang);
 
-    // FEATURE: Manual Google Search for Model 1 (Gemma)
-    if (useSearch && provider === 'model1') {
-      console.log("🔍 Performing Web Search for:", text.substring(0, 50));
-      const searchResults = await performSearch(text, modelConfig.apiKey, modelConfig.searchCX);
+    // FEATURE: Web Search (All Models)
+    // Query enhancement: "Text + in TargetLang" to get better context/translation
+    if (useSearch) {
+      const searchQuery = `${text} in ${targetLang}`;
+      console.log("🔍 Performing Web Search for:", searchQuery.substring(0, 50));
+      const searchResults = await performSearch(searchQuery, modelConfig.apiKey, modelConfig.searchCX);
 
       if (searchResults) {
-        // Inject search results into the System Prompt (first message)
-        messages[0].content += `\n\nAdditional Context from Web Search:\n${searchResults}\n\nUse this information to improve the translation accuracy if relevant.`;
+        const searchContext = `\n\nAdditional Context from Web Search:\n${searchResults}\n\nUse this information to improve the translation accuracy if relevant.`;
+
+        // Inject context
+        // For Gemma (Model1), we will merge this into the single User message later.
+        // For others, we append to System Prompt now.
+        if (provider !== 'model1') {
+          messages[0].content += searchContext;
+        } else {
+          // Store it to append to User message
+          req.searchContext = searchContext;
+        }
       }
     }
 
     // Prepare completion options
     const completionOptions = {
       model: modelConfig.modelName,
-      messages: messages,
+      messages: messages, // Default messages
       temperature: 0.3,
     };
 
-    // FIX for Model 1 (Gemma/Google): Do not use response_format: json_object if inconsistent
-    if (provider !== 'model1') {
+    // FIX for Model 1 (Gemma 3): NO System Role, NO response_format: json_object
+    if (provider === 'model1') {
+      // merge system prompt and user prompt
+      const systemContent = messages.find(m => m.role === 'system')?.content || "";
+      const userContent = messages.find(m => m.role === 'user')?.content || "";
+      const searchInfo = req.searchContext || "";
+
+      const combinedMessage = `
+       ${systemContent}
+       
+       ${searchInfo}
+
+       ${userContent}
+       `;
+
+      completionOptions.messages = [
+        { role: 'user', content: combinedMessage }
+      ];
+    } else {
+      // Standard Models: Use JSON mode
       completionOptions.response_format = { type: "json_object" };
     }
-
-    console.log(`🚀 Sending request to ${provider} (${modelConfig.modelName}) via ${modelConfig.baseURL}`);
 
     const completion = await openai.chat.completions.create(completionOptions);
 
