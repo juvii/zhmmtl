@@ -11,8 +11,8 @@ export const MODELS_CONFIG = {
     'model1': {
         // Example: Fast/Cheap Model (e.g., GPT-4o-mini, Flash equivalent)
         apiKey: process.env.MODEL1_API_KEY || process.env.OPENAI_API_KEY,
-        baseURL: process.env.MODEL1_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai',
-        modelName: process.env.MODEL1_NAME || 'gemma-3-27b',
+        baseURL: process.env.MODEL1_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/',
+        modelName: process.env.MODEL1_NAME || 'gemma-3-27b-it',
     },
     'model2': {
         // Example: High Intelligence Model (e.g., GPT-4o, Claude 3.5 Sonnet via wrapper)
