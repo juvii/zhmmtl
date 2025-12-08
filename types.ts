@@ -4,10 +4,11 @@ export enum Language {
   English = 'English',
 }
 
-export type TranslationProvider = 
-  | 'gemini-2.5-flash' 
-  | 'gemini-2.5-flash-lite' 
-  | 'gemini-2.5-flash-2'
+// Updated to generic model names
+export type TranslationProvider =
+  | 'model1'
+  | 'model2'
+  | 'model3'
   | 'google';
 
 export interface TranslationResult {

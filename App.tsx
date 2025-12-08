@@ -1,398 +1,38 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { 
-  ArrowRightLeft, Sparkles, Copy, History, X, Languages, Loader2, 
-  Image as ImageIcon, Bot, Zap, Globe, ScanLine, Camera, ChevronLeft
+import {
+  ArrowRightLeft, Sparkles, Copy, History, X, Languages, Loader2,
+  Image as ImageIcon, ScanLine,
 } from 'lucide-react';
-import { translateText, extractTextFromImage, extractTextWithOverlay } from './services/geminiService';
-import { Language, TranslationResult, TranslationProvider, OCRBlock } from './types';
+import { translateText, extractTextFromImage } from './services/geminiService';
+import { Language, TranslationResult, TranslationProvider } from './types';
+import { UI_STRINGS, UiLanguage } from './constants/translations';
 
-type UiLanguage = 'zh' | 'en';
-
-const UI_STRINGS = {
-  zh: {
-    appTitle: "Juvi 翻译",
-    history: "历史记录",
-    recent: "最近",
-    noHistory: "暂无记录",
-    translateFrom: "源语言",
-    translateTo: "目标语言",
-    engine: "引擎",
-    inputLabel: "输入内容",
-    uploadImage: "上传图片",
-    readingImage: "正在识别图片...",
-    placeholder: "请输入文字或上传图片...",
-    translateBtn: "翻译",
-    translatingBtn: "翻译中...",
-    clear: "清空",
-    copy: "复制",
-    copied: "已复制",
-    details: "详解与语境",
-    errorOCR: "未能在图片中找到文字。",
-    errorFile: "文件读取失败。",
-    errorTrans: "翻译失败，请检查网络或稍后重试。",
-    footer: "© 2024 Juvi 翻译. 基于 Gemini AI & Google Cloud.",
-    emptyState: "准备翻译",
-    burmese: "🇲🇲 缅甸语",
-    chinese: "🇨🇳 中文 (简体)",
-    english: "🇺🇸 英语",
-    scanTab: "智能扫描",
-    homeTab: "文本翻译",
-    scanTitle: "图片文字识别",
-    scanInstruct: "上传图片，直接选择图片中的文字进行复制",
-    noTextFound: "未检测到文字",
-    processing: "正在分析图片...",
-    uploadBtn: "选择图片",
-  },
-  en: {
-    appTitle: "Juvi's Translate",
-    history: "History",
-    recent: "Recent",
-    noHistory: "No history yet",
-    translateFrom: "From",
-    translateTo: "To",
-    engine: "Engine",
-    inputLabel: "Input",
-    uploadImage: "Upload Image",
-    readingImage: "Reading image...",
-    placeholder: "Enter text or upload image...",
-    translateBtn: "Translate",
-    translatingBtn: "Translating...",
-    clear: "Clear",
-    copy: "Copy",
-    copied: "Copied",
-    details: "Details & Context",
-    errorOCR: "No text could be found in this image.",
-    errorFile: "Failed to read file.",
-    errorTrans: "Translation failed. Please try again.",
-    footer: "© 2024 Juvi's Translate. Powered by Gemini AI & Google Cloud.",
-    emptyState: "Ready to translate",
-    burmese: "🇲🇲 Burmese",
-    chinese: "🇨🇳 Chinese",
-    english: "🇺🇸 English",
-    scanTab: "Smart Scan",
-    homeTab: "Text Translate",
-    scanTitle: "Image Text Recognition",
-    scanInstruct: "Upload image and select text directly to copy",
-    noTextFound: "No text detected",
-    processing: "Analyzing image...",
-    uploadBtn: "Select Image",
-  }
-};
-
-const OCRLoadingSkeleton: React.FC = () => (
-  <div className="space-y-3 w-full max-w-md">
-    {[...Array(4)].map((_, i) => (
-      <div
-        key={i}
-        className="h-6 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 rounded-lg animate-pulse"
-        style={{
-          animationDelay: `${i * 0.1}s`,
-          width: `${Math.random() * 40 + 60}%`
-        }}
-      />
-    ))}
-  </div>
-);
-
-const LanguageSelector: React.FC<{
-  label: string;
-  selected: Language;
-  onChange: (lang: Language) => void;
-  disabled?: boolean;
-  t: typeof UI_STRINGS['zh'];
-}> = ({ label, selected, onChange, disabled, t }) => (
-  <div className="flex flex-col gap-1 w-full">
-    <label id={`lang-${label}`} className="hidden sm:block text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">{label}</label>
-    <div className="relative">
-      <select
-        value={selected}
-        onChange={(e) => onChange(e.target.value as Language)}
-        disabled={disabled}
-        aria-labelledby={`lang-${label}`}
-        aria-label={label}
-        className="appearance-none w-full bg-white border border-slate-200 text-slate-700 text-sm sm:text-base py-2 sm:py-2.5 px-3 sm:px-4 pr-8 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm truncate"
-      >
-        <option value={Language.Burmese}>{t.burmese}</option>
-        <option value={Language.Chinese}>{t.chinese}</option>
-        <option value={Language.English}>{t.english}</option>
-      </select>
-      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
-        <svg className="fill-current h-3 w-3 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-          <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-        </svg>
-      </div>
-    </div>
-  </div>
-);
-
-const ModelSelector: React.FC<{
-  selected: TranslationProvider;
-  onChange: (provider: TranslationProvider) => void;
-  disabled?: boolean;
-}> = ({ selected, onChange, disabled }) => {
-  const getStyle = (id: TranslationProvider, activeColor: string) => `
-    flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-all flex-1 sm:flex-none whitespace-nowrap
-    ${selected === id 
-      ? `bg-white text-${activeColor}-600 shadow-sm ring-1 ring-slate-200` 
-      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}
-  `;
-
-  return (
-    <div className="flex flex-wrap sm:flex-nowrap items-center gap-1 bg-slate-100 p-1 rounded-lg w-full sm:w-auto overflow-x-auto no-scrollbar">
-      <button onClick={() => onChange('gemini-2.5-flash-lite')} disabled={disabled} className={getStyle('gemini-2.5-flash-lite', 'emerald')}>
-        <Zap size={14} />
-        <span>Lite</span>
-      </button>
-      <button onClick={() => onChange('gemini-2.5-flash')} disabled={disabled} className={getStyle('gemini-2.5-flash', 'brand')}>
-        <Bot size={14} />
-        <span>Flash</span>
-      </button>
-      <button onClick={() => onChange('gemini-2.5-flash-2')} disabled={disabled} className={getStyle('gemini-2.5-flash-2', 'orange')}>
-        <Zap size={14} className="fill-orange-100" />
-        <span>Flash 2</span>
-      </button>
-      <button onClick={() => onChange('google')} disabled={disabled} className={getStyle('google', 'blue')}>
-        <Globe size={14} />
-        <span>Google</span>
-      </button>
-    </div>
-  );
-};
-
-const HistoryItemCard: React.FC<{ item: TranslationResult; onClick: () => void }> = ({ item, onClick }) => {
-  const getFlag = (lang: Language) => {
-    switch(lang) {
-      case Language.Burmese: return '🇲🇲';
-      case Language.Chinese: return '🇨🇳';
-      case Language.English: return '🇺🇸';
-      default: return '🏳️';
-    }
-  };
-
-  const getProviderBadge = (provider: TranslationProvider) => {
-    if (provider === 'google') return <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100">Google</span>;
-    if (provider.includes('lite')) return <span className="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded border border-emerald-100">Lite</span>;
-    if (provider === 'gemini-2.5-flash-2') return <span className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded border border-orange-100">Flash 2</span>;
-    return <span className="text-[10px] bg-brand-50 text-brand-600 px-1.5 py-0.5 rounded border border-brand-100">Flash</span>;
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      className="w-full group relative bg-white border border-slate-100 hover:border-brand-200 p-3 sm:p-4 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer text-left"
-      aria-label={`History item: translate from ${item.sourceLang} to ${item.targetLang}. Original: ${item.original}. Translation: ${item.translation}`}
-    >
-      <div className="flex justify-between items-start mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-slate-400" aria-hidden="true">
-            {getFlag(item.sourceLang)} → {getFlag(item.targetLang)}
-          </span>
-          {getProviderBadge(item.provider)}
-        </div>
-        <span className="text-xs text-slate-300 group-hover:text-brand-400 transition-colors">
-          {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </span>
-      </div>
-      <p className="text-slate-800 line-clamp-1 mb-1 text-sm sm:text-base">
-        {item.original}
-      </p>
-      <p className="text-brand-600 line-clamp-1 text-sm sm:text-base">
-        {item.translation}
-      </p>
-    </button>
-  );
-};
-
-const ScanPage: React.FC<{
-  t: typeof UI_STRINGS['zh'];
-  onBack: () => void;
-}> = ({ t, onBack }) => {
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [blocks, setBlocks] = useState<OCRBlock[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const imgRef = useRef<HTMLImageElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [scale, setScale] = useState({ x: 1, y: 1 });
-
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsLoading(true);
-    setBlocks([]);
-
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64 = reader.result as string;
-      setImageSrc(base64);
-      try {
-        const result = await extractTextWithOverlay(base64);
-        setBlocks(result.blocks);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const updateScale = () => {
-    if (imgRef.current) {
-      const { naturalWidth, naturalHeight, clientWidth, clientHeight } = imgRef.current;
-      if (naturalWidth && naturalHeight) {
-        setScale({
-          x: clientWidth / naturalWidth,
-          y: clientHeight / naturalHeight
-        });
-      }
-    }
-  };
-
-  useEffect(() => {
-    window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
-  }, []);
-
-  const calculateOptimalFontSize = (boxHeight: number, textLength: number) => {
-    const size = boxHeight * 0.7;
-    const lengthFactor = Math.min(1, 50 / Math.max(1, textLength));
-    return size * lengthFactor;
-  };
-
-  return (
-    <div className="flex flex-col h-full gap-4" role="main" aria-label="OCR scanning interface">
-      <div className="flex justify-between items-center px-1">
-        <button onClick={onBack} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 transition-colors">
-          <ChevronLeft size={20} />
-          <span className="text-sm font-medium">{t.homeTab}</span>
-        </button>
-        <span className="font-bold text-slate-700 flex items-center gap-2">
-          <ScanLine size={18} /> {t.scanTab}
-        </span>
-        <div className="w-8" />
-      </div>
-
-      <div className="flex-1 bg-slate-900/5 rounded-2xl border-2 border-dashed border-slate-300 relative overflow-hidden flex flex-col items-center justify-center">
-        {!imageSrc ? (
-          <div className="text-center p-6">
-            <Camera size={48} className="mx-auto text-slate-300 mb-4" />
-            <p className="text-slate-500 mb-4">{t.scanInstruct}</p>
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              className="bg-brand-600 text-white px-6 py-2 rounded-full font-medium hover:bg-brand-700 transition shadow-lg shadow-brand-500/20"
-            >
-              {t.uploadBtn}
-            </button>
-          </div>
-        ) : (
-          <div className="relative w-full h-full flex items-center justify-center overflow-auto bg-slate-900">
-             {isLoading && (
-               <div 
-                 className="absolute inset-0 z-30 bg-black/50 flex flex-col items-center justify-center backdrop-blur-sm text-white"
-                 aria-live="polite" 
-                 aria-label="Processing image"
-               >
-                 <Loader2 size={40} className="animate-spin mb-3" aria-hidden="true" />
-                 <p className="font-medium mb-4">{t.processing}</p>
-                 <div className="bg-black/40 rounded-lg p-4">
-                   <OCRLoadingSkeleton />
-                 </div>
-               </div>
-             )}
-             
-             <div className="relative inline-block group">
-               <img 
-                 ref={imgRef}
-                 src={imageSrc} 
-                 className="max-w-full max-h-[70vh] object-contain select-none"
-                 onLoad={updateScale}
-                 alt="Document with extracted text"
-                 role="img"
-               />
-               
-               {!isLoading && blocks.map((block, idx) => {
-                 const scaledWidth = block.box.width * scale.x;
-                 const scaledHeight = block.box.height * scale.y;
-                 const fontSize = calculateOptimalFontSize(scaledHeight, block.text.length);
-                 
-                 return (
-                   <div
-                     key={idx}
-                     className="absolute select-text cursor-text group/block hover:bg-blue-400/10 transition-colors"
-                     title={`Text: ${block.text}`}
-                     aria-label={`Extracted text: ${block.text}`}
-                     style={{
-                       left: `${block.box.x * scale.x}px`,
-                       top: `${block.box.y * scale.y}px`,
-                       width: `${scaledWidth}px`,
-                       height: `${scaledHeight}px`,
-                       fontSize: `${fontSize}px`,
-                       lineHeight: `${scaledHeight}px`,
-                       fontFamily: 'sans-serif, system-ui',
-                       fontWeight: '400',
-                       zIndex: 10,
-                       color: 'rgba(0,0,0,0.01)',
-                       padding: '2px 4px',
-                       boxSizing: 'border-box',
-                       overflow: 'hidden',
-                       whiteSpace: 'pre-wrap',
-                       wordWrap: 'break-word',
-                       textAlign: 'left',
-                       verticalAlign: 'top',
-                     }}
-                   >
-                     {block.text}
-                   </div>
-                 );
-               })}
-             </div>
-             
-             <button 
-                onClick={() => { setImageSrc(null); setBlocks([]); }}
-                className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-sm z-30 transition-all"
-                aria-label="Close image"
-                title="Close and reset"
-             >
-                <X size={20} aria-hidden="true" />
-             </button>
-          </div>
-        )}
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          className="hidden" 
-          accept="image/*" 
-          onChange={handleFile}
-          aria-label="Select image for OCR"
-        />
-      </div>
-    </div>
-  );
-};
+import LanguageSelector from './components/LanguageSelector';
+import ModelSelector from './components/ModelSelector';
+import HistoryItemCard from './components/HistoryItemCard';
+import ScanPage from './components/ScanPage';
 
 const App: React.FC = () => {
   const [uiLang, setUiLang] = useState<UiLanguage>('zh');
   const t = UI_STRINGS[uiLang];
 
   const [view, setView] = useState<'home' | 'scan'>('home');
-  
+
   const [sourceLang, setSourceLang] = useState<Language>(Language.Burmese);
   const [targetLang, setTargetLang] = useState<Language>(Language.Chinese);
-  const [provider, setProvider] = useState<TranslationProvider>('gemini-2.5-flash');
-  
+  const [provider, setProvider] = useState<TranslationProvider>('model1');
+
   const [inputText, setInputText] = useState('');
   const [result, setResult] = useState<TranslationResult | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const [isOcrLoading, setIsOcrLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [history, setHistory] = useState<TranslationResult[]>(() => {
     const saved = localStorage.getItem('translation_history');
     return saved ? JSON.parse(saved) : [];
   });
-  
+
   useEffect(() => {
     localStorage.setItem('translation_history', JSON.stringify(history));
   }, [history]);
@@ -416,7 +56,7 @@ const App: React.FC = () => {
 
     try {
       const data = await translateText(inputText, sourceLang, targetLang, provider);
-      
+
       const newResult: TranslationResult = {
         original: inputText,
         translation: data.translation,
@@ -508,9 +148,9 @@ const App: React.FC = () => {
               {t.appTitle}
             </h1>
           </div>
-          
+
           <div className="flex items-center gap-2 sm:gap-3">
-            <button 
+            <button
               onClick={toggleUiLang}
               className="px-2 py-1 text-xs font-bold bg-slate-100 text-slate-600 rounded border border-slate-200 hover:bg-slate-200 transition-colors"
               aria-label={`Switch interface language to ${uiLang === 'zh' ? 'English' : 'Chinese'}`}
@@ -519,7 +159,7 @@ const App: React.FC = () => {
               {uiLang === 'zh' ? 'EN' : '中文'}
             </button>
 
-            <button 
+            <button
               onClick={() => setShowHistory(!showHistory)}
               className={`p-2 rounded-full transition-all ${showHistory ? 'bg-brand-100 text-brand-700' : 'hover:bg-slate-100 text-slate-600'}`}
               title={t.history}
@@ -534,46 +174,46 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-grow w-full max-w-5xl mx-auto p-3 sm:p-6 flex flex-col lg:flex-row gap-4 sm:gap-6">
-        
+
         {view === 'scan' ? (
           <div className="flex-1 w-full h-[calc(100vh-8rem)]">
-             <ScanPage 
-               t={t} 
-               onBack={() => setView('home')} 
-             />
+            <ScanPage
+              t={t}
+              onBack={() => setView('home')}
+            />
           </div>
         ) : (
           <div className="flex-1 flex flex-col gap-4 sm:gap-6">
-            
+
             <div className="bg-gradient-to-r from-brand-500 to-brand-600 rounded-xl p-4 text-white flex items-center justify-between shadow-lg shadow-brand-500/20">
               <div className="flex items-center gap-3">
                 <div className="bg-white/20 p-2 rounded-lg"><ScanLine size={20} /></div>
                 <div>
-                   <h3 className="font-bold text-sm sm:text-base">{t.scanTitle}</h3>
-                   <p className="text-xs text-brand-100 opacity-90">{t.scanInstruct}</p>
+                  <h3 className="font-bold text-sm sm:text-base">{t.scanTitle}</h3>
+                  <p className="text-xs text-brand-100 opacity-90">{t.scanInstruct}</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => setView('scan')}
                 className="bg-white text-brand-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-brand-50 transition shadow-sm"
               >
                 {t.scanTab}
               </button>
             </div>
-            
+
             <div className="bg-white p-3 sm:p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center gap-3 sm:gap-4">
-              
+
               <div className="w-full flex flex-row items-end justify-between gap-2 sm:gap-4">
                 <div className="flex-1 min-w-0">
-                  <LanguageSelector 
+                  <LanguageSelector
                     label={t.translateFrom}
-                    selected={sourceLang} 
-                    onChange={setSourceLang} 
+                    selected={sourceLang}
+                    onChange={setSourceLang}
                     t={t}
                   />
                 </div>
-                
-                <button 
+
+                <button
                   onClick={swapLanguages}
                   className="p-2 sm:p-2.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-brand-600 transition-colors mb-[1px] sm:mb-0 shrink-0"
                   title="Swap"
@@ -582,36 +222,36 @@ const App: React.FC = () => {
                 </button>
 
                 <div className="flex-1 min-w-0">
-                  <LanguageSelector 
+                  <LanguageSelector
                     label={t.translateTo}
-                    selected={targetLang} 
-                    onChange={setTargetLang} 
+                    selected={targetLang}
+                    onChange={setTargetLang}
                     t={t}
                   />
                 </div>
               </div>
 
-               <div className="w-full flex flex-col sm:flex-row justify-between items-center border-t border-slate-100 pt-3 gap-2">
-                 <span className="hidden sm:inline text-xs font-semibold text-slate-400 uppercase tracking-wider self-start sm:self-center mt-1 sm:mt-0">{t.engine}:</span>
-                 <ModelSelector selected={provider} onChange={setProvider} disabled={isLoading} />
-               </div>
+              <div className="w-full flex flex-col sm:flex-row justify-between items-center border-t border-slate-100 pt-3 gap-2">
+                <span className="hidden sm:inline text-xs font-semibold text-slate-400 uppercase tracking-wider self-start sm:self-center mt-1 sm:mt-0">{t.engine}:</span>
+                <ModelSelector selected={provider} onChange={setProvider} disabled={isLoading} />
+              </div>
             </div>
 
             <div className="flex flex-col gap-4">
-              
+
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden focus-within:ring-2 focus-within:ring-brand-500/50 focus-within:border-brand-500 transition-all">
                 <div className="p-3 sm:p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t.inputLabel}</span>
                   <div className="flex items-center gap-2">
-                    <input 
-                      type="file" 
-                      ref={homeFileInputRef} 
-                      className="hidden" 
+                    <input
+                      type="file"
+                      ref={homeFileInputRef}
+                      className="hidden"
                       accept="image/*"
                       onChange={handleLegacyImageUpload}
                       aria-label="Upload image for OCR"
                     />
-                    <button 
+                    <button
                       onClick={() => homeFileInputRef.current?.click()}
                       disabled={isLoading}
                       className="flex items-center gap-1 text-slate-500 hover:text-brand-600 transition-colors text-xs font-medium px-2 py-1 rounded-md hover:bg-slate-100"
@@ -621,9 +261,9 @@ const App: React.FC = () => {
                       <span className="hidden sm:inline">{t.uploadImage}</span>
                     </button>
                     {inputText && (
-                      <button 
-                        onClick={clearInput} 
-                        className="text-slate-400 hover:text-red-500 transition-colors ml-2" 
+                      <button
+                        onClick={clearInput}
+                        className="text-slate-400 hover:text-red-500 transition-colors ml-2"
                         title={t.clear}
                         aria-label={t.clear}
                       >
@@ -655,11 +295,10 @@ const App: React.FC = () => {
                   <button
                     onClick={handleTranslate}
                     disabled={!inputText.trim() || isLoading}
-                    className={`flex items-center gap-2 text-white px-5 sm:px-6 py-2 sm:py-2.5 rounded-xl font-medium text-sm sm:text-base transition-all shadow-md active:scale-95 ${
-                      provider === 'google' 
-                      ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20' 
+                    className={`flex items-center gap-2 text-white px-5 sm:px-6 py-2 sm:py-2.5 rounded-xl font-medium text-sm sm:text-base transition-all shadow-md active:scale-95 ${provider === 'google'
+                      ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
                       : 'bg-brand-600 hover:bg-brand-700 shadow-brand-500/20'
-                    } disabled:bg-slate-300 disabled:shadow-none disabled:cursor-not-allowed`}
+                      } disabled:bg-slate-300 disabled:shadow-none disabled:cursor-not-allowed`}
                     aria-busy={isTranslating}
                     aria-label={isTranslating ? t.translatingBtn : t.translateBtn}
                   >
@@ -679,33 +318,30 @@ const App: React.FC = () => {
               </div>
 
               {error && (
-                <div 
+                <div
                   className="bg-red-50 text-red-600 p-3 sm:p-4 rounded-xl border border-red-100 text-sm flex items-center gap-3 animate-in fade-in slide-in-from-top-2"
                   role="alert"
                   aria-live="assertive"
                   aria-atomic="true"
                 >
-                   <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" aria-hidden="true" />
-                   {error}
+                  <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" aria-hidden="true" />
+                  {error}
                 </div>
               )}
 
               {result && (
-                <div className={`bg-white rounded-2xl shadow-lg border overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 ${
-                  result.provider === 'google' ? 'border-blue-100' : 'border-brand-100'
-                }`}>
-                  <div className={`p-3 sm:p-4 border-b flex justify-between items-center ${
-                    result.provider === 'google' ? 'bg-blue-50/30 border-blue-50' : 'bg-brand-50/30 border-slate-50'
+                <div className={`bg-white rounded-2xl shadow-lg border overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 ${result.provider === 'google' ? 'border-blue-100' : 'border-brand-100'
                   }`}>
+                  <div className={`p-3 sm:p-4 border-b flex justify-between items-center ${result.provider === 'google' ? 'bg-blue-50/30 border-blue-50' : 'bg-brand-50/30 border-slate-50'
+                    }`}>
                     <div className="flex items-center gap-2">
-                      <span className={`text-xs font-bold uppercase tracking-wider ${
-                        result.provider === 'google' ? 'text-blue-600' : 'text-brand-600'
-                      }`}>
+                      <span className={`text-xs font-bold uppercase tracking-wider ${result.provider === 'google' ? 'text-blue-600' : 'text-brand-600'
+                        }`}>
                         {result.provider}
                       </span>
                     </div>
                     <div className="flex gap-2">
-                      <button 
+                      <button
                         onClick={() => copyToClipboard(result.translation)}
                         className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-white rounded-md transition-colors"
                         title={t.copy}
@@ -714,7 +350,7 @@ const App: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  
+
                   <div className="p-4 sm:p-6 space-y-4">
                     <div>
                       <p className={`text-xl sm:text-2xl leading-relaxed text-slate-800 ${targetLang === Language.Burmese ? 'font-burmese' : 'font-chinese'}`}>
@@ -730,11 +366,10 @@ const App: React.FC = () => {
                     {result.details && (
                       <div className="pt-4 border-t border-slate-100">
                         <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">{t.details}</h4>
-                        <p className={`text-sm text-slate-600 leading-relaxed p-3 rounded-lg border ${
-                          result.provider === 'google' 
-                          ? 'bg-blue-50/50 border-blue-50/50 text-blue-700' 
+                        <p className={`text-sm text-slate-600 leading-relaxed p-3 rounded-lg border ${result.provider === 'google'
+                          ? 'bg-blue-50/50 border-blue-50/50 text-blue-700'
                           : 'bg-brand-50/50 border-brand-50/50'
-                        }`}>
+                          }`}>
                           {result.details}
                         </p>
                       </div>
@@ -744,17 +379,17 @@ const App: React.FC = () => {
               )}
 
               {!result && !isLoading && !error && (
-                 <div className="flex flex-col items-center justify-center p-8 sm:p-12 text-slate-300 border-2 border-dashed border-slate-200 rounded-2xl">
-                    <Languages size={40} strokeWidth={1} className="mb-4 text-slate-200 sm:w-12 sm:h-12" />
-                    <p className="text-sm font-medium">{t.emptyState}</p>
-                 </div>
+                <div className="flex flex-col items-center justify-center p-8 sm:p-12 text-slate-300 border-2 border-dashed border-slate-200 rounded-2xl">
+                  <Languages size={40} strokeWidth={1} className="mb-4 text-slate-200 sm:w-12 sm:h-12" />
+                  <p className="text-sm font-medium">{t.emptyState}</p>
+                </div>
               )}
             </div>
           </div>
         )}
 
         {showHistory && view === 'home' && (
-          <aside 
+          <aside
             id="history-panel"
             className="fixed lg:static inset-0 z-50 bg-white lg:bg-transparent lg:w-80 lg:block flex flex-col lg:border-none"
             role="region"
@@ -762,7 +397,7 @@ const App: React.FC = () => {
           >
             <div className="lg:hidden p-4 border-b border-slate-100 flex justify-between items-center bg-white shadow-sm">
               <h3 className="font-bold text-slate-800 text-lg">{t.history}</h3>
-              <button 
+              <button
                 onClick={() => setShowHistory(false)}
                 className="p-2 bg-slate-100 rounded-full text-slate-600"
                 aria-label="Close history panel"
@@ -770,13 +405,13 @@ const App: React.FC = () => {
                 <X size={20} aria-hidden="true" />
               </button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-4 lg:p-1 space-y-3 lg:space-y-2 custom-scrollbar">
               <div className="hidden lg:flex items-center gap-2 mb-4 text-slate-400 px-1">
                 <History size={16} aria-hidden="true" />
                 <span className="text-sm font-medium uppercase tracking-wider">{t.recent}</span>
               </div>
-              
+
               {history.length === 0 ? (
                 <div className="text-center py-12 lg:py-8 text-slate-400 text-sm" aria-live="polite">{t.noHistory}</div>
               ) : (
