@@ -21,7 +21,7 @@ type UiLanguage = 'zh' | 'en';
 
 const UI_STRINGS = {
   zh: {
-    appTitle: "Juvi 翻译",
+    appTitle: "Juvis 翻译",
     history: "历史记录",
     recent: "最近",
     noHistory: "暂无记录",
