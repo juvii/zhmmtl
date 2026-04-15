@@ -1,6 +1,4 @@
-Note (It is a fuck around and find out type of project not very useful yet)
-
-A powerful AI-powered translation and communication tool designed to bridge language barriers between Myanmar (Burmese) and Chinese speakers. This application leverages advanced AI models and OCR technology to provide accurate translations, pronunciation guides, and text extraction from images.
+An AI-powered translation and communication tool.
 
 ## 🚀 Features
 
